@@ -8,6 +8,8 @@ project(mfuse_ros)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(Boost REQUIRED COMPONENTS thread)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -35,7 +37,11 @@ find_package(catkin REQUIRED)
 ## * In this file (CMakeLists.txt):
 ##   * add "message_generation" and every package in MSG_DEP_SET to
 find_package(catkin REQUIRED COMPONENTS
-  roscpp
+  roscpp 
+  rospy
+  std_msgs
+  cv_bridge
+  image_transport
 )
 ##   * add "message_runtime" and every package in MSG_DEP_SET to
 ##     catkin_package(CATKIN_DEPENDS ...)
@@ -115,6 +121,7 @@ catkin_package(
 ## Your package locations should be listed before other locations
 include_directories(
   include ${catkin_INCLUDE_DIRS}
+  ${PROJECT_SOURCE_DIR}/include
 # include
 # ${catkin_INCLUDE_DIRS}
 )
@@ -197,11 +204,38 @@ include_directories(
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
 
+# mfuse
 
 add_executable(mfuse_ros_node
+  src/DeviceEnumerator.cpp
+  src/mfuse.cpp
   src/mfuse_ros_node.cpp
 )
+
 add_dependencies(mfuse_ros_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(mfuse_ros_node
+  stdc++
   ${catkin_LIBRARIES}
+  ${OpenCV_LIBS}
+  ${Boost_LIBRARIES}
+  ${OpenCV_LIBRARIES}
 )
+
+# mfuse_align 
+
+add_executable(mfuse_align
+  src/mfuse_align_ros_node.cpp
+  src/mfuse_align.cpp
+)
+add_dependencies(mfuse_align ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(mfuse_align
+  stdc++
+  ${catkin_LIBRARIES}
+  ${OpenCV_LIBS}
+  ${Boost_LIBRARIES}
+  ${OpenCV_LIBRARIES}
+)
+
+# Create logs directory
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/spdlogs")
+

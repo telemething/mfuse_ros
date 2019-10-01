@@ -1,12 +1,12 @@
 /*
- * livox_to_octree_node.cpp
+ * mfuse_align_ros_node.cpp
  *
  *  Created on: 1.1.1
  *      Author: Mark West
  *   
  */
 
-#include <mfuse.hpp>
+#include <mfuse_align.hpp>
 
 int main(int argc, char** argv) {
 
@@ -15,10 +15,10 @@ int main(int argc, char** argv) {
     ros::console::notifyLoggerLevelsChanged();
   }*/
 
-  ros::init(argc, argv, "mfuse_ros");
+  ros::init(argc, argv, "mfuse_align");
   ros::NodeHandle nodeHandle("~");
 
-  mfuse::CameraFuse cameraFuse(nodeHandle);
+  //mfuse::CameraFuse cameraFuse(nodeHandle);
 
   ros::spin();
   return 0;

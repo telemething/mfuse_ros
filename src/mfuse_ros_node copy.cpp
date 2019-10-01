@@ -6,7 +6,9 @@
  *   
  */
 
-#include <mfuse.hpp>
+#include <mfuse_ros.hpp>
+
+int mfuse_startAsync();
 
 int main(int argc, char** argv) {
 
@@ -17,8 +19,9 @@ int main(int argc, char** argv) {
 
   ros::init(argc, argv, "mfuse_ros");
   ros::NodeHandle nodeHandle("~");
+  //l2o::livox_to_octree livoxToOctree(nodeHandle);
 
-  mfuse::CameraFuse cameraFuse(nodeHandle);
+  mfuse_startAsync();
 
   ros::spin();
   return 0;
