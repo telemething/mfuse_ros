@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
   ros::init(argc, argv, "mfuse_align");
   ros::NodeHandle nodeHandle("~");
 
-  //mfuse::CameraFuse cameraFuse(nodeHandle);
+  mfuse::CameraAlign cameraAlign(nodeHandle);
 
   ros::spin();
   return 0;

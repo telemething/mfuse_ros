@@ -16,6 +16,12 @@ boost::interprocess::interprocess_semaphore fusedImageReady_(0);
 boost::interprocess::interprocess_semaphore rgbImageReady_(0);
 boost::interprocess::interprocess_semaphore irImageReady_(0);
 
+cv::Mat combinedImage;
+CameraAlign::matchPointType matchPoint;
+std::vector<CameraAlign::matchPointType> matchPoints;
+std::string rectifyWindowsName = "rectify2";
+int matchPointEndWidthOffset = 0;
+
 //*****************************************************************************
 //*
 //*
@@ -27,6 +33,7 @@ CameraAlign::CameraAlign(ros::NodeHandle nh) :
       imageTransport_(nodeHandle_)
 {
 	std::string logDirectory = "/Data/Shared/Logs/";
+	showCameraInStreams_ = true;
 
 	ROS_INFO("[CameraAlign] Node started.");
 
@@ -41,7 +48,7 @@ CameraAlign::CameraAlign(ros::NodeHandle nh) :
 
 	init();
 
-	logger_->info("ok");
+	logger_->info("oky");
 }
 
 //*****************************************************************************
@@ -114,6 +121,189 @@ int CameraAlign::init()
 	gotWarp_ = readWarpFile(warpFileName, warpMatrix);*/
 }
 
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	int CameraAlign::readWarp(const std::string filename, cv::Mat& warp)
+	{
+		cv::FileStorage fs2(filename, cv::FileStorage::READ);
+		fs2["warpMatrix"] >> warp;
+		fs2.release();
+
+		if (nullptr == warp.data)
+			return 0;
+
+		return 1;
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	int CameraAlign::saveWarp(const std::string fileName, const cv::Mat& warp)
+	{
+		cv::FileStorage fs(fileName, cv::FileStorage::WRITE);
+		fs << "warpMatrix" << warp;
+		fs.release();
+		return 1;
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	static void manualRectifyMouseCallback(int event, int x, int y, int flags, void* userdata)
+	{
+		if (event == cv::MouseEventTypes::EVENT_LBUTTONDOWN)
+		{
+			matchPoint.begin.x = x;
+			matchPoint.begin.y = y;
+		}
+		if (event == cv::MouseEventTypes::EVENT_LBUTTONUP)
+		{
+			if (matchPointEndWidthOffset > x)
+				return;
+
+			matchPoint.end.x = x;
+			matchPoint.end.y = y;
+
+			cv::line(combinedImage, matchPoint.begin,
+				matchPoint.end, cv::Scalar(110, 220, 0), 1, 8);
+
+			cv::imshow(rectifyWindowsName, combinedImage);
+
+			matchPoint.end.x -= matchPointEndWidthOffset;
+			matchPoints.push_back({ matchPoint });
+
+			printf("Added matchPoint (%i,%i),(%i,%i)\r\n",
+				matchPoint.begin.x, matchPoint.begin.y, matchPoint.end.x, matchPoint.end.y);
+		}
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	void CameraAlign::getSideBySideImage(const cv::Mat& im1, const cv::Mat& im2, cv::Mat& imCombined, const std::string windowName)
+	{
+		cv::Mat combined( std::max(im1.size().height, im2.size().height),
+			im1.size().width + im2.size().width, CV_8UC3);
+
+		matchPointEndWidthOffset = im1.size().width;
+
+		printf("combined frame c r : %i %i\r\n", combined.cols, combined.rows);
+
+		cv::Mat left_roi(combined, cv::Rect(0, 0, im1.size().width, im1.size().height));
+		im1.copyTo(left_roi);
+		cv::Mat right_roi(combined, cv::Rect(im1.size().width, 0, im2.size().width, im2.size().height));
+		im2.copyTo(right_roi);
+
+		imCombined = combined;
+
+		if (0 < windowName.length())
+		{
+			//auto winName = windowName.c_str();
+			//auto winName = "aaa1";
+			//namedWindow("aaa1", WINDOW_GUI_EXPANDED);
+			cv::namedWindow(windowName.c_str());
+			cv::setMouseCallback(windowName.c_str(), manualRectifyMouseCallback, this);
+			cv::imshow(windowName.c_str(), combined);
+		}
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	cv::Mat CameraAlign::calculateHomography(std::vector<matchPointType> matchPoints)
+	{
+		std::vector<cv::Point2f> begin, end;
+
+		while (!matchPoints.empty())
+		{
+			begin.push_back(matchPoints.back().begin);
+			end.push_back(matchPoints.back().end);
+			matchPoints.pop_back();
+		}
+
+		return findHomography(begin, end);
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	void CameraAlign::rectifyManually(cv::Mat& im1, cv::Mat& im2)
+	{
+		cv::Mat imCombined, homography, imFitted, imBlended, ROI;
+
+		double alpha = 0.5; double beta = 1 - alpha;
+
+		getSideBySideImage(im1, im2, imCombined, rectifyWindowsName);
+
+		combinedImage = imCombined.clone();
+
+		std::cout << "Press: 'c' : clear, 'f' : fuse, 'a' : accept, 'q' : quit" << std::endl;
+
+		while (true)
+		{
+			int keyPressed = cv::waitKey(30);
+
+			if (keyPressed == -1)
+				continue;
+
+			std::cout << "Key '" << keyPressed << "' pressed" << std::endl;
+
+			switch (keyPressed)
+			{
+			case 'c':
+				matchPoints.clear();
+				combinedImage = imCombined.clone();
+				imshow(rectifyWindowsName, combinedImage);
+				break;
+			case 'f':
+				// get homogarphy
+				homography = calculateHomography(matchPoints);
+
+				saveWarp(warpFileName, homography);
+
+				// Warp source image to destination based on homography
+				warpPerspective(im1, imFitted, homography, im2.size());
+
+				cv::imshow("imFitted", imFitted);
+
+				//ROI = im1(Rect(0, 1, imFitted.cols, imFitted.rows));
+
+				//addWeighted(ROI, alpha, imFitted, beta, 0.0, imBlended);
+
+				//imshow("blended", imBlended);
+
+				break;
+			case 'a':
+				return;
+			case 'q':
+				return;
+			default:
+				break;
+			}
+		}
+	}
+
+
+
 //*****************************************************************************
 //*
 //*
@@ -146,7 +336,7 @@ void CameraAlign::rgbCameraCallback(const sensor_msgs::ImageConstPtr& msg)
       if(showCameraInStreams_)
 	    {
       	cv::imshow(rgbInImageShowName_, rgbImage_->image);
-      	//cv::waitKey(3);
+      	cv::waitKey(3);
 	    }
 
       //frameWidth_ = rgbImage_->image.size().width;
@@ -206,7 +396,7 @@ void CameraAlign::irCameraCallback(const sensor_msgs::ImageConstPtr& msg)
       if(showCameraInStreams_)
 	    {
       	cv::imshow(irInImageShowName_, irImage_->image);
-      	//cv::waitKey(3);
+      	cv::waitKey(3);
 	    }
 
       //frameWidth_ = irImage_->image.size().width;
@@ -230,8 +420,6 @@ void CameraAlign::irCameraCallback(const sensor_msgs::ImageConstPtr& msg)
     ROS_ERROR("--- EXCEPTION --- CameraFuse::irCameraCallback: -undefined-");
     logger_->error("--- EXCEPTION --- CameraFuse::irCameraCallback: -undefined-");
   }
-
-  return;
 }
 
 //*****************************************************************************

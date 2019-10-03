@@ -31,6 +31,12 @@ namespace mfuse
 {
 class CameraAlign 
 {
+public:
+
+  struct matchPointType { cv::Point2i begin; cv::Point2i end; };
+  explicit CameraAlign(ros::NodeHandle nh);
+  ~CameraAlign();
+
 private:
 
   int logloopTimeoutMilliseconds_ = 250;
@@ -72,11 +78,11 @@ private:
   void rgbCameraCallback(const sensor_msgs::ImageConstPtr& msg);
   void irCameraCallback(const sensor_msgs::ImageConstPtr& msg);
 
-public:
-
-  explicit CameraAlign(ros::NodeHandle nh);
-  ~CameraAlign();
-
+  int readWarp(const std::string filename, cv::Mat& warp);
+	int saveWarp(const std::string fileName, const cv::Mat& warp);
+	void getSideBySideImage(const cv::Mat& im1, const cv::Mat& im2, cv::Mat& imCombined, const std::string windowName);
+	cv::Mat calculateHomography(std::vector<matchPointType> matchPoints);
+	void rectifyManually(cv::Mat& im1, cv::Mat& im2);
 }; // class CameraAlign   
 } // namespace mfuse
 

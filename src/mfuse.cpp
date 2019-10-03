@@ -30,11 +30,11 @@ CameraFuse::CameraFuse(ros::NodeHandle nh) :
   warpFileName = "c:\\data\\thewarp.json";
   warpType_ = cv::MOTION_HOMOGRAPHY;
 
-	showCameraInStreams_ = true;
+	showCameraInStreams_ = false;
   showDebugImages_ = false;
   showFusedImage_ = true;
 
-	ROS_INFO("[CameraFuse] Node started.");
+	ROS_INFO("[CameraFuse] Node startedy.");
 
 	CreateLogger(logDirectory);
 	logger_->info("Node started");
@@ -360,7 +360,13 @@ int CameraFuse::fusionloop()
 
 int CameraFuse::displayloop()
 {
-  cv::namedWindow(fusedImageDisplayName_);
+  if(showFusedImage_)
+  {
+    cv::namedWindow(fusedImageDisplayName_);
+    cv::createTrackbar("Thermal", fusedImageDisplayName_, &iThermalAlpha, 100);
+	  cv::createTrackbar("Color", fusedImageDisplayName_, &iColorAlpha, 100);
+  }
+
 	cv::Mat fusedImage;
 
   while(true)
@@ -375,7 +381,7 @@ int CameraFuse::displayloop()
         // lock the images
         boost::shared_lock<boost::shared_mutex> lock(mutexFusedImage_);
        
-        cv::imshow("fusedImageDisplayName_", fusedImage_);
+        cv::imshow(fusedImageDisplayName_, fusedImage_);
         cv::waitKey(3);
       }
     }
@@ -426,7 +432,7 @@ void CameraFuse::rgbCameraCallback(const sensor_msgs::ImageConstPtr& msg)
       if(showCameraInStreams_)
 	    {
       	cv::imshow(rgbInImageShowName_, rgbImage_->image);
-      	//cv::waitKey(3);
+      	cv::waitKey(3);
 	    }
 
       //frameWidth_ = rgbImage_->image.size().width;
@@ -486,7 +492,7 @@ void CameraFuse::irCameraCallback(const sensor_msgs::ImageConstPtr& msg)
       if(showCameraInStreams_)
 	    {
       	cv::imshow(irInImageShowName_, irImage_->image);
-      	//cv::waitKey(3);
+      	cv::waitKey(3);
 	    }
 
       //frameWidth_ = irImage_->image.size().width;
