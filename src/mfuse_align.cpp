@@ -33,7 +33,7 @@ CameraAlign::CameraAlign(ros::NodeHandle nh) :
       imageTransport_(nodeHandle_)
 {
 	std::string logDirectory = "/Data/Shared/Logs/";
-	showCameraInStreams_ = true;
+	showCameraInStreams_ = false;
 
 	ROS_INFO("[CameraAlign] Node started.");
 
@@ -48,7 +48,7 @@ CameraAlign::CameraAlign(ros::NodeHandle nh) :
 
 	init();
 
-	logger_->info("oky");
+	logger_->info("ok");
 }
 
 //*****************************************************************************
@@ -109,11 +109,11 @@ int CameraAlign::init()
 	irSubscriber_ = imageTransport_.subscribe(irCameraTopicName, irCameraQueueSize,
                                                &CameraAlign::irCameraCallback, this);
 
-    /*fusionThread_ = std::thread(&CameraFuse::fusionloop, this); 
-    displayThread_ = std::thread(&CameraFuse::displayloop, this); 
+    //fusionThread_ = std::thread(&CameraFuse::fusionloop, this); 
+    displayThread_ = std::thread(&CameraAlign::displayloop, this); 
 
     // initialize or load the warp matrix
-	if (warpType_ == cv::MOTION_HOMOGRAPHY)
+	/*if (warpType_ == cv::MOTION_HOMOGRAPHY)
 		warpMatrix = cv::Mat::eye(3, 3, CV_32F);
 	else
 		warpMatrix = cv::Mat::eye(2, 3, CV_32F);
@@ -187,6 +187,11 @@ int CameraAlign::init()
 		}
 	}
 
+	static void clearButtonCallback(int state, void* userdata)
+	{
+
+	}
+
 	//*****************************************************************************
 	//
 	//
@@ -215,6 +220,14 @@ int CameraAlign::init()
 			//auto winName = "aaa1";
 			//namedWindow("aaa1", WINDOW_GUI_EXPANDED);
 			cv::namedWindow(windowName.c_str());
+			cv::createTrackbar("Thermal", windowName.c_str(), &iThermalAlpha, 100);
+	  		cv::createTrackbar("Color", windowName.c_str(), &iColorAlpha, 100);
+
+			cv::createButton("Clear", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+			cv::createButton("Fuse", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+			cv::createButton("Accept", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+			cv::createButton("Quit", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+
 			cv::setMouseCallback(windowName.c_str(), manualRectifyMouseCallback, this);
 			cv::imshow(windowName.c_str(), combined);
 		}
@@ -246,6 +259,8 @@ int CameraAlign::init()
 	//
 	//*****************************************************************************
 
+	bool staticRectifyImages_ = false;
+
 	void CameraAlign::rectifyManually(cv::Mat& im1, cv::Mat& im2)
 	{
 		cv::Mat imCombined, homography, imFitted, imBlended, ROI;
@@ -260,6 +275,35 @@ int CameraAlign::init()
 
 		while (true)
 		{
+			/* leave it for another time
+			if(!staticRectifyImages_)
+			{
+				//{
+				// lock the images
+					boost::shared_lock<boost::shared_mutex> lockRgb(mutexRgbCameraImage_);
+					boost::shared_lock<boost::shared_mutex> lockIr(mutexIrCameraImage_);
+
+					//irImage_->image.copyTo(im1);
+					//rgbImage_->image.copyTo(im2);
+				//}
+
+				cv::Mat combined( std::max(im1.size().height, im2.size().height),
+					im1.size().width + im2.size().width, CV_8UC3);
+
+				//matchPointEndWidthOffset = im1.size().width;
+
+				//printf("combined frame c r : %i %i\r\n", combined.cols, combined.rows);
+
+				cv::Mat left_roi(combined, cv::Rect(0, 0, im1.size().width, im1.size().height));
+				im1.copyTo(left_roi);
+				cv::Mat right_roi(combined, cv::Rect(im1.size().width, 0, im2.size().width, im2.size().height));
+				im2.copyTo(right_roi);
+
+				imCombined = combined;
+
+				cv::imshow(rectifyWindowsName.c_str(), combined);
+			}*/
+
 			int keyPressed = cv::waitKey(30);
 
 			if (keyPressed == -1)
@@ -302,7 +346,60 @@ int CameraAlign::init()
 		}
 	}
 
+//*****************************************************************************
+//*
+//*
+//*
+//******************************************************************************
 
+int CameraAlign::displayloop()
+{
+  /*if(showFusedImage_)
+  {
+    cv::namedWindow(fusedImageDisplayName_);
+    cv::createTrackbar("Thermal", fusedImageDisplayName_, &iThermalAlpha, 100);
+	  cv::createTrackbar("Color", fusedImageDisplayName_, &iColorAlpha, 100);
+  }*/
+
+  while(true)
+  {     
+    try
+    {
+	  imageReady_.wait();
+
+      if(!gotRgbImage_ | !gotIrImage_)
+        continue;
+
+	  rectifyManually(irImage_->image, rgbImage_->image);
+
+	  break;
+
+      // wait for a new fused image to appear
+      /*fusedImageReady_.wait();
+
+      if(showFusedImage_)
+      {
+        // lock the images
+        boost::shared_lock<boost::shared_mutex> lock(mutexFusedImage_);
+       
+        cv::imshow(fusedImageDisplayName_, fusedImage_);
+        cv::waitKey(3);
+      }*/
+    }
+    catch(const std::exception& e)
+    {
+      ROS_ERROR("--- EXCEPTION --- CameraFuse::displayloop: %s", e.what());
+      logger_->error("- EXCEPTION --- CameraFuse::displayloop: {}", e.what());
+    }
+    catch(...)
+    {
+      ROS_ERROR("--- EXCEPTION --- CameraFuse::displayloop: -undefined-");
+      logger_->error("--- EXCEPTION --- CameraFuse::displayloop: -undefined-");
+    }
+  }
+
+  return 0; 
+}
 
 //*****************************************************************************
 //*

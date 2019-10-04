@@ -27,7 +27,7 @@ CameraFuse::CameraFuse(ros::NodeHandle nh) :
       imageTransport_(nodeHandle_)
 {
 	std::string logDirectory = "/Data/Shared/Logs/";
-  warpFileName = "c:\\data\\thewarp.json";
+  warpFileName = "thewarp.json";
   warpType_ = cv::MOTION_HOMOGRAPHY;
 
 	showCameraInStreams_ = false;
@@ -362,7 +362,7 @@ int CameraFuse::displayloop()
 {
   if(showFusedImage_)
   {
-    cv::namedWindow(fusedImageDisplayName_);
+    cv::namedWindow(fusedImageDisplayName_, cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
     cv::createTrackbar("Thermal", fusedImageDisplayName_, &iThermalAlpha, 100);
 	  cv::createTrackbar("Color", fusedImageDisplayName_, &iColorAlpha, 100);
   }

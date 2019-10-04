@@ -57,6 +57,10 @@ private:
 
   std::shared_ptr<spdlog::logger> logger_;
   std::thread log_thread; 
+  std::thread displayThread_;
+
+  int iThermalAlpha = 50;
+  int iColorAlpha = 50;
 
   // ROS subscribers 
   image_transport::Subscriber rgbSubscriber_;
@@ -83,6 +87,8 @@ private:
 	void getSideBySideImage(const cv::Mat& im1, const cv::Mat& im2, cv::Mat& imCombined, const std::string windowName);
 	cv::Mat calculateHomography(std::vector<matchPointType> matchPoints);
 	void rectifyManually(cv::Mat& im1, cv::Mat& im2);
+  int displayloop();
+
 }; // class CameraAlign   
 } // namespace mfuse
 
