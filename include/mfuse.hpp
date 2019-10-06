@@ -7,6 +7,7 @@
 #include <std_msgs/String.h>
 #include <image_transport/image_transport.h>
 #include <iostream>
+#include <sensor_msgs/PointCloud2.h>
 
 #include <boost/interprocess/sync/interprocess_semaphore.hpp>
 #include <boost/format.hpp>
@@ -27,6 +28,17 @@
 #include "opencv2/opencv.hpp"
 #include <opencv2/tracking.hpp>
 
+#include <pcl/point_types.h>
+#include <pcl/common/projection_matrix.h>
+#include <pcl/conversions.h>
+//#include <pcl_conversions.h>
+//#include <pcl/pcl_conversions.h>
+
+#include <pcl/PCLPointCloud2.h>
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/visualization/cloud_viewer.h>
+
+// http://wiki.ros.org/pcl_conversions
 
 namespace mfuse
 {
@@ -44,11 +56,15 @@ private:
   int iColorAlpha = 50;
   int logloopTimeoutMilliseconds_ = 250;
   bool showCameraInStreams_ = false;
+  bool showCloudInStreams_ = false;
   bool showDebugImages_ = false;
   bool showFusedImage_ = false;
   bool gotWarp_ = false;
   bool gotRgbImage_ = false;
   bool gotIrImage_ = false;
+
+  typedef pcl::PointXYZI VPoint;
+  typedef pcl::PointCloud<VPoint> VPointCloud;
 
   ros::NodeHandle nodeHandle_;
   image_transport::ImageTransport imageTransport_;
@@ -61,6 +77,7 @@ private:
   // ROS subscribers 
   image_transport::Subscriber rgbSubscriber_;
   image_transport::Subscriber irSubscriber_;
+  ros::Subscriber pcInSubscriber_;
   boost::shared_mutex mutexRgbCameraImage_;
   boost::shared_mutex mutexIrCameraImage_;
   boost::shared_mutex mutexFusedImage_;
@@ -73,6 +90,8 @@ private:
   cv::Mat warpMatrix, roiIncludeMask, roiExcludeMask, fusedImage_;
   std::vector<cv::Point2f> warpedBBox;
 
+  std::shared_ptr<pcl::visualization::CloudViewer> cloudViewer_;
+
   bool readParameters();
   void CreateLogger(std::string logDirectory);
   int logloop();
@@ -81,6 +100,7 @@ private:
 
   void rgbCameraCallback(const sensor_msgs::ImageConstPtr& msg);
   void irCameraCallback(const sensor_msgs::ImageConstPtr& msg);
+  void pcInCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
 
   int readWarpFile(const std::string filename, cv::Mat& warp);
   int DrawROI(cv::Mat image, std::vector<cv::Point2f> outline);

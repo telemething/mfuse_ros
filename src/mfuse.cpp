@@ -8,6 +8,8 @@
 
 #include <mfuse.hpp>
 
+
+
 namespace mfuse
 {
 
@@ -32,7 +34,8 @@ CameraFuse::CameraFuse(ros::NodeHandle nh) :
 
 	showCameraInStreams_ = false;
   showDebugImages_ = false;
-  showFusedImage_ = true;
+  showFusedImage_ = false;
+  showCloudInStreams_ = true;
 
 	ROS_INFO("[CameraFuse] Node startedy.");
 
@@ -106,25 +109,43 @@ int CameraFuse::init()
 {
 	std::string rgbCameraTopicName;
 	std::string irCameraTopicName;
+	std::string pcInTopicName;
 
 	int rgbCameraQueueSize; 
 	int irCameraQueueSize; 
+	int pcInQueueSize; 
 
 	nodeHandle_.param("subscribers/rgb_camera_reading/topic", rgbCameraTopicName,
                     std::string("/gscam1/image_raw"));
 
-	nodeHandle_.param("subscribers/rgb_camera_reading/queue_size", rgbCameraQueueSize, 1);  
+	nodeHandle_.param("subscribers/rgb_camera_reading/queue_size", rgbCameraQueueSize, 5);  
 
 	nodeHandle_.param("subscribers/ir_camera_reading/topic", irCameraTopicName,
                     std::string("/flir_boson/image_raw"));
 
-	nodeHandle_.param("subscribers/rir_camera_reading/queue_size", irCameraQueueSize, 1);  
+	nodeHandle_.param("subscribers/ir_camera_reading/queue_size", irCameraQueueSize, 5);  
+
+	nodeHandle_.param("subscribers/point_cloud_reading/topic", pcInTopicName,
+                    std::string("/livox/lidar"));
+
+	nodeHandle_.param("subscribers/point_cloud_reading/queue_size", pcInQueueSize, 5);  
+
+  // create UI windows
+
+  if(showCloudInStreams_)
+    cloudViewer_ = std::make_shared<pcl::visualization::CloudViewer>("cloudViewer");
+
+  // create subscribers
 
 	rgbSubscriber_ = imageTransport_.subscribe(rgbCameraTopicName, rgbCameraQueueSize,
                                                &CameraFuse::rgbCameraCallback, this);
 
 	irSubscriber_ = imageTransport_.subscribe(irCameraTopicName, irCameraQueueSize,
                                                &CameraFuse::irCameraCallback, this);
+
+  pcInSubscriber_ = nodeHandle_.subscribe( pcInTopicName, pcInQueueSize, &CameraFuse::pcInCallback, this);
+
+  // create threads
 
   fusionThread_ = std::thread(&CameraFuse::fusionloop, this); 
   displayThread_ = std::thread(&CameraFuse::displayloop, this); 
@@ -363,8 +384,12 @@ int CameraFuse::displayloop()
   if(showFusedImage_)
   {
     cv::namedWindow(fusedImageDisplayName_, cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
-    cv::createTrackbar("Thermal", fusedImageDisplayName_, &iThermalAlpha, 100);
-	  cv::createTrackbar("Color", fusedImageDisplayName_, &iColorAlpha, 100);
+    cv::createTrackbar("Thermal / Vis", fusedImageDisplayName_, &iThermalAlpha, 100);
+	  cv::createTrackbar("Thermal Color", fusedImageDisplayName_, &iColorAlpha, 100);
+    
+    // interesting potential
+    // https://docs.opencv.org/2.4/modules/highgui/doc/qt_new_functions.html
+    //cv::setOpenGlDrawCallback()
   }
 
 	cv::Mat fusedImage;
@@ -398,6 +423,48 @@ int CameraFuse::displayloop()
   }
 
   return 0; 
+}
+
+//*****************************************************************************
+//*
+//*
+//*
+//******************************************************************************
+
+void CameraFuse::pcInCallback(const sensor_msgs::PointCloud2ConstPtr& msg)
+{
+  ROS_DEBUG("[CameraFuse] pc in received.");
+  //logger_->info("[CameraFuse] pc in received");
+
+  VPointCloud pcl_in_;
+  
+  try 
+  {
+    //msg->header.stamp.sec
+    // Retrieve the input point cloud
+    pcl::fromROSMsg(*msg, pcl_in_);
+
+    if(showCloudInStreams_)
+      cloudViewer_->showCloud(pcl_in_.makeShared());
+  } 
+  catch (cv_bridge::Exception& e) 
+  {
+    ROS_ERROR("-- EXCEPTION --- CameraFuse::pcInCallback: %s", e.what());
+    logger_->error("- EXCEPTION --- CameraFuse::pcInCallback: {}", e.what());
+    return;
+  }
+  catch(const std::exception& e)
+  {
+    ROS_ERROR("--- EXCEPTION --- CameraFuse::pcInCallback: %s", e.what());
+    logger_->error("- EXCEPTION --- CameraFuse::pcInCallback: {}", e.what());
+  }
+  catch(...)
+  {
+    ROS_ERROR("--- EXCEPTION --- CameraFuse::pcInCallback: -undefined-");
+    logger_->error("--- EXCEPTION --- CameraFuse::pcInCallback: -undefined-");
+  }
+
+  return;
 }
 
 //*****************************************************************************

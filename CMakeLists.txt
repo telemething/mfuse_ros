@@ -10,6 +10,17 @@ project(mfuse_ros)
 find_package(catkin REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Boost REQUIRED COMPONENTS thread)
+find_package(PCL REQUIRED)
+
+## Add include directories
+include_directories(include
+	  ${PCL_INCLUDE_DIRS}
+)
+
+## Add link directories
+link_directories(
+  ${PCL_LIBRARY_DIRS}
+)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -42,6 +53,12 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   cv_bridge
   image_transport
+  nodelet
+  pcl_ros
+  pcl_conversions
+  sensor_msgs
+  nav_msgs
+  tf
 )
 ##   * add "message_runtime" and every package in MSG_DEP_SET to
 ##     catkin_package(CATKIN_DEPENDS ...)
@@ -219,6 +236,7 @@ target_link_libraries(mfuse_ros_node
   ${OpenCV_LIBS}
   ${Boost_LIBRARIES}
   ${OpenCV_LIBRARIES}
+  ${PCL_LIBRARIES}
 )
 
 # mfuse_align 
@@ -234,6 +252,7 @@ target_link_libraries(mfuse_align
   ${OpenCV_LIBS}
   ${Boost_LIBRARIES}
   ${OpenCV_LIBRARIES}
+  ${PCL_LIBRARIES}
 )
 
 # Create logs directory

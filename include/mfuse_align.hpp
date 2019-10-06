@@ -27,6 +27,12 @@
 #include "opencv2/opencv.hpp"
 #include <opencv2/tracking.hpp>
 
+#include <opencv2/core/core.hpp>
+#include <pcl_ros/impl/transforms.hpp>
+#include <tf/message_filter.h>
+#include <message_filters/subscriber.h>
+#include <sensor_msgs/PointCloud2.h>
+
 namespace mfuse
 {
 class CameraAlign 
