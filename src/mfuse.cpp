@@ -36,6 +36,7 @@ CameraFuse::CameraFuse(ros::NodeHandle nh) :
   showDebugImages_ = false;
   showFusedImage_ = false;
   showCloudInStreams_ = true;
+  collectCloudDataStats_ = false;
 
 	ROS_INFO("[CameraFuse] Node startedy.");
 
@@ -133,7 +134,19 @@ int CameraFuse::init()
   // create UI windows
 
   if(showCloudInStreams_)
-    cloudViewer_ = std::make_shared<pcl::visualization::CloudViewer>("cloudViewer");
+  {
+    cloudViewer_ = std::make_shared<pcl::visualization::PCLVisualizer>("cloudViewer");
+
+    //cloudViewer_->createViewPort(0.0, 0.0, 0.5, 1.0, cloudViewPort_);
+    cloudViewer_->setBackgroundColor(0, 0, 0, cloudViewPort_);
+
+    //cloudViewer_->createViewPort(0.5, 0.0, 1.0, 1.0, downsampled_view);
+    //cloudViewer_->setBackgroundColor(0, 0, 0, downsampled_view);
+
+    cloudViewer_->addCoordinateSystem(1.0);
+    cloudViewer_->initCameraParameters();
+  }
+
 
   // create subscribers
 
@@ -149,6 +162,8 @@ int CameraFuse::init()
 
   fusionThread_ = std::thread(&CameraFuse::fusionloop, this); 
   displayThread_ = std::thread(&CameraFuse::displayloop, this); 
+
+  cloudViewerTimer_ = nodeHandle_.createTimer(ros::Duration(0.1), &CameraFuse::cloudViewerTimerCallback, this);
 
   // initialize or load the warp matrix
 	if (warpType_ == cv::MOTION_HOMOGRAPHY)
@@ -381,6 +396,11 @@ int CameraFuse::fusionloop()
 
 int CameraFuse::displayloop()
 {
+  if(showCloudInStreams_)
+  {
+    cv::namedWindow(cloudProjectionDisplayName_, cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
+  }
+
   if(showFusedImage_)
   {
     cv::namedWindow(fusedImageDisplayName_, cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
@@ -392,23 +412,30 @@ int CameraFuse::displayloop()
     //cv::setOpenGlDrawCallback()
   }
 
-	cv::Mat fusedImage;
-
   while(true)
   {     
     try
     {
-      // wait for a new fused image to appear
-      fusedImageReady_.wait();
+      if(showCloudInStreams_)
+      {
+        cv::imshow(cloudProjectionDisplayName_, cloudProjectionImage_);
+      }
 
       if(showFusedImage_)
       {
+        // wait for a new fused image to appear
+        fusedImageReady_.wait();
+
         // lock the images
         boost::shared_lock<boost::shared_mutex> lock(mutexFusedImage_);
        
-        cv::imshow(fusedImageDisplayName_, fusedImage_);
-        cv::waitKey(3);
+        cv::imshow(fusedImageDisplayName_, fusedImage_); 
       }
+
+      if(showCloudInStreams_ || showFusedImage_)
+        cv::waitKey(1);
+      else
+        cv::waitKey(100);
     }
     catch(const std::exception& e)
     {
@@ -431,21 +458,113 @@ int CameraFuse::displayloop()
 //*
 //******************************************************************************
 
+void CameraFuse::cloudViewerTimerCallback(const ros::TimerEvent&)
+{
+    cloudViewer_->spinOnce();
+
+    if (cloudViewer_->wasStopped())
+    {
+        //ros::shutdown();
+    }
+}
+
+/*inline
+void toROSMsg(const sensor_msgs::PointCloud2 &cloud, sensor_msgs::Image &image)
+{
+  pcl::PCLPointCloud2 pcl_cloud;
+  pcl_conversions::toPCL(cloud, pcl_cloud);
+  pcl::PCLImage pcl_image;
+  pcl::toPCLPointCloud2(pcl_cloud, pcl_image);
+  pcl_conversions::moveFromPCL(pcl_image, image);
+}*/
+
+//*****************************************************************************
+//*
+//* Convert a LIVOX unorganized point cloud to a cv::Mat image
+//*
+//******************************************************************************
+
+void CameraFuse::toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud, 
+    cv::Mat& outImage, int width = 1000, int height = 1000, int scale = 10)
+  {  
+    // allocate image
+    outImage.create(height,width,CV_32F);
+    // set all values to 0
+    outImage = 0;
+
+    for (size_t y = 0; y < cloud.height; y++)
+    {
+      for (size_t x = 0; x < cloud.width; x++)
+      {
+        if(collectCloudDataStats_)
+        {
+          maxX = std::max(maxX,cloud[x].x);
+          maxY = std::max(maxY,cloud[x].y);
+          maxZ = std::max(maxZ,cloud[x].z);
+          minX = std::min(minX,cloud[x].x);
+          minY = std::min(minY,cloud[x].y);
+          minZ = std::min(minZ,cloud[x].z);
+        }
+
+        //if(0 < cloud[x].x && 0 < cloud[x].y)
+        {
+          //X = depth forward, y = width left, z = height up
+          outImage.at<float>((scale * cloud[x].y) + height/2, (scale * cloud[x].z) + width/2) = cloud[x].x;
+        }
+      }
+    }
+
+    outImage.convertTo(outImage,CV_8U);
+  }
+
+//*****************************************************************************
+//*
+//*
+//*
+//******************************************************************************
+
 void CameraFuse::pcInCallback(const sensor_msgs::PointCloud2ConstPtr& msg)
 {
   ROS_DEBUG("[CameraFuse] pc in received.");
   //logger_->info("[CameraFuse] pc in received");
 
-  VPointCloud pcl_in_;
+  int width = 1000;
+  int height = 1000;
+  int scale = 10;
   
+  VPointCloud pcl_in_;
+
+  sensor_msgs::Image cloudInRosImage_; 
+  cv_bridge::CvImagePtr cloudInImage_;
+  pcl::PCLImage pcl_image;
+  cv::Mat theMat;
+
   try 
   {
-    //msg->header.stamp.sec
-    // Retrieve the input point cloud
+    // convert ROS cloud to pcl cloud
     pcl::fromROSMsg(*msg, pcl_in_);
 
+    // convert pcl cloud to cv image
+    toCvImage(pcl_in_, theMat, width, height, scale);
+
+    cloudProjectionImage_ = theMat.clone();
+
+    //logger_->warn("[xy]: {}, {}, {} : {}, {}, {}", maxX, maxY, maxZ, minX, minY, minZ);
+
+    // some dead ends that might be a good reference
+    //pcl::toPCLPointCloud2(pcl_in_, pcl_image);
+    //convert ROS cloud to ROS image
+    //pcl::toROSMsg (*msg, cloudInRosImage_); 
+    //cloudInImage_ = cv_bridge::toCvCopy(cloudInRosImage_, sensor_msgs::image_encodings::MONO16);
+
     if(showCloudInStreams_)
-      cloudViewer_->showCloud(pcl_in_.makeShared());
+    {
+    	//cv::imshow(cloudProjectionDisplayName_, theMat);
+    	//cv::waitKey(1);
+
+      cloudViewer_->removeAllPointClouds(cloudViewPort_);
+      cloudViewer_->addPointCloud<pcl::PointXYZI>(pcl_in_.makeShared(), "downsampled", cloudViewPort_);
+    }
   } 
   catch (cv_bridge::Exception& e) 
   {

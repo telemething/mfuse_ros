@@ -50,6 +50,7 @@ private:
   std::string irInImageShowName_ = "IR In";
   std::string warpFileName = "thewarp.json";
   std::string fusedImageDisplayName_ = "Fused Image";
+  std::string cloudProjectionDisplayName_ = "Cloud Projection";
 
   int warpType_ = cv::MOTION_HOMOGRAPHY;
   int iThermalAlpha = 50;
@@ -62,9 +63,13 @@ private:
   bool gotWarp_ = false;
   bool gotRgbImage_ = false;
   bool gotIrImage_ = false;
+  bool collectCloudDataStats_ = false;
 
   typedef pcl::PointXYZI VPoint;
   typedef pcl::PointCloud<VPoint> VPointCloud;
+  //typedef pcl::PCLPointCloud2 VPointCloud;
+
+  float maxX = 0, maxY = 0, maxZ = 0, minX = 0, minY = 0, minZ = 0;
 
   ros::NodeHandle nodeHandle_;
   image_transport::ImageTransport imageTransport_;
@@ -84,13 +89,16 @@ private:
 
   cv_bridge::CvImagePtr rgbImage_;
   cv_bridge::CvImagePtr irImage_;
+  cv::Mat cloudProjectionImage_;
   std_msgs::Header rgbImageHeader_;
   std_msgs::Header irImageHeader_;
 
   cv::Mat warpMatrix, roiIncludeMask, roiExcludeMask, fusedImage_;
   std::vector<cv::Point2f> warpedBBox;
 
-  std::shared_ptr<pcl::visualization::CloudViewer> cloudViewer_;
+  std::shared_ptr<pcl::visualization::PCLVisualizer> cloudViewer_;
+  int cloudViewPort_ = 0;
+  ros::Timer cloudViewerTimer_;
 
   bool readParameters();
   void CreateLogger(std::string logDirectory);
@@ -101,11 +109,15 @@ private:
   void rgbCameraCallback(const sensor_msgs::ImageConstPtr& msg);
   void irCameraCallback(const sensor_msgs::ImageConstPtr& msg);
   void pcInCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
+  void cloudViewerTimerCallback(const ros::TimerEvent&);
 
   int readWarpFile(const std::string filename, cv::Mat& warp);
   int DrawROI(cv::Mat image, std::vector<cv::Point2f> outline);
   std::vector<cv::Point2f> getTransposedBBox(const cv::Mat original, const cv::Mat warpMatrix);
   cv::Mat getMask(const cv::Mat original, const std::vector<cv::Point2f> area, const bool include) ;
+
+  void toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud, 
+    cv::Mat& outImage, int width, int height, int scale);
 
 public:
 
