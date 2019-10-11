@@ -227,6 +227,7 @@ add_executable(mfuse_ros_node
   src/DeviceEnumerator.cpp
   src/mfuse.cpp
   src/mfuse_ros_node.cpp
+  src/mfuse_cloud_ops.cpp
 )
 
 add_dependencies(mfuse_ros_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})

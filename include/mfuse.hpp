@@ -38,6 +38,8 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/visualization/cloud_viewer.h>
 
+#include <mfuse_cloud_ops.hpp>
+
 // http://wiki.ros.org/pcl_conversions
 
 namespace mfuse
@@ -65,11 +67,13 @@ private:
   bool gotIrImage_ = false;
   bool collectCloudDataStats_ = false;
 
-  typedef pcl::PointXYZI VPoint;
-  typedef pcl::PointCloud<VPoint> VPointCloud;
+  //typedef pcl::PointXYZI VPoint;
+  //typedef pcl::PointCloud<VPoint> VPointCloud;
   //typedef pcl::PCLPointCloud2 VPointCloud;
 
-  float maxX = 0, maxY = 0, maxZ = 0, minX = 0, minY = 0, minZ = 0;
+  CloudOps cloudOps_;
+
+  //float maxX = 0, maxY = 0, maxZ = 0, minX = 0, minY = 0, minZ = 0;
 
   ros::NodeHandle nodeHandle_;
   image_transport::ImageTransport imageTransport_;
