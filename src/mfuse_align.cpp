@@ -34,6 +34,7 @@ CameraAlign::CameraAlign(ros::NodeHandle nh) :
 {
 	std::string logDirectory = "/Data/Shared/Logs/";
 	showCameraInStreams_ = false;
+	showCloudInStreams_ = true;
 
 	ROS_INFO("[CameraAlign] Node started.");
 
@@ -89,9 +90,11 @@ int CameraAlign::init()
 {
 	std::string rgbCameraTopicName;
 	std::string irCameraTopicName;
+	std::string pcInTopicName;
 
 	int rgbCameraQueueSize; 
 	int irCameraQueueSize; 
+	int pcInQueueSize; 
 
 	nodeHandle_.param("subscribers/rgb_camera_reading/topic", rgbCameraTopicName,
                     std::string("/gscam1/image_raw"));
@@ -109,8 +112,36 @@ int CameraAlign::init()
 	irSubscriber_ = imageTransport_.subscribe(irCameraTopicName, irCameraQueueSize,
                                                &CameraAlign::irCameraCallback, this);
 
+	nodeHandle_.param("subscribers/point_cloud_reading/topic", pcInTopicName,
+                    							std::string("/livox/lidar"));
+
+	nodeHandle_.param("subscribers/point_cloud_reading/queue_size", pcInQueueSize, 5);  
+
+
+	if(showCloudInStreams_)
+	{
+		cloudViewer_ = std::make_shared<pcl::visualization::PCLVisualizer>("cloudViewer");
+
+		//cloudViewer_->createViewPort(0.0, 0.0, 0.5, 1.0, cloudViewPort_);
+		cloudViewer_->setBackgroundColor(0, 0, 0, cloudViewPort_);
+
+		//cloudViewer_->createViewPort(0.5, 0.0, 1.0, 1.0, downsampled_view);
+		//cloudViewer_->setBackgroundColor(0, 0, 0, downsampled_view);
+
+		cloudViewer_->addCoordinateSystem(1.0);
+		cloudViewer_->initCameraParameters();
+	}
+
+  	pcInSubscriber_ = nodeHandle_.subscribe( pcInTopicName, pcInQueueSize, 
+	  										 &CameraAlign::pcInCallback, this);
+
+
     //fusionThread_ = std::thread(&CameraFuse::fusionloop, this); 
     displayThread_ = std::thread(&CameraAlign::displayloop, this); 
+
+	cloudViewerTimer_ = nodeHandle_.createTimer(ros::Duration(0.1), 
+												&CameraAlign::cloudViewerTimerCallback, this);
+
 
     // initialize or load the warp matrix
 	/*if (warpType_ == cv::MOTION_HOMOGRAPHY)
@@ -198,7 +229,8 @@ int CameraAlign::init()
 	//
 	//*****************************************************************************
 
-	void CameraAlign::getSideBySideImage(const cv::Mat& im1, const cv::Mat& im2, cv::Mat& imCombined, const std::string windowName)
+	void CameraAlign::getSideBySideImage(const cv::Mat& im1, const cv::Mat& im2, 
+		cv::Mat& imCombined, const std::string windowName)
 	{
 		cv::Mat combined( std::max(im1.size().height, im2.size().height),
 			im1.size().width + im2.size().width, CV_8UC3);
@@ -354,6 +386,12 @@ int CameraAlign::init()
 
 int CameraAlign::displayloop()
 {
+  if(showCloudInStreams_)
+  {
+    cv::namedWindow(cloudProjectionDisplayName_, 
+		cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
+  }
+
   /*if(showFusedImage_)
   {
     cv::namedWindow(fusedImageDisplayName_);
@@ -374,8 +412,13 @@ int CameraAlign::displayloop()
 
 	  break;
 
+	  /*if(showCloudInStreams_)
+      {
+        cv::imshow(cloudProjectionDisplayName_, cloudProjectionImage_);
+      }
+
       // wait for a new fused image to appear
-      /*fusedImageReady_.wait();
+      fusedImageReady_.wait();
 
       if(showFusedImage_)
       {
@@ -384,7 +427,13 @@ int CameraAlign::displayloop()
        
         cv::imshow(fusedImageDisplayName_, fusedImage_);
         cv::waitKey(3);
-      }*/
+      }
+
+	  if(showCloudInStreams_ || showFusedImage_)
+        cv::waitKey(1);
+      else
+        cv::waitKey(100);*/
+
     }
     catch(const std::exception& e)
     {
@@ -399,6 +448,73 @@ int CameraAlign::displayloop()
   }
 
   return 0; 
+}
+
+//*****************************************************************************
+//*
+//*
+//*
+//******************************************************************************
+
+void CameraAlign::cloudViewerTimerCallback(const ros::TimerEvent&)
+{
+    cloudViewer_->spinOnce();
+
+    if (cloudViewer_->wasStopped())
+    {
+        //ros::shutdown();
+    }
+}
+
+//*****************************************************************************
+//*
+//*
+//*
+//******************************************************************************
+
+void CameraAlign::pcInCallback(const sensor_msgs::PointCloud2ConstPtr& msg)
+{
+  ROS_DEBUG("[CameraFuse] pc in received.");
+  //logger_->info("[CameraFuse] pc in received");
+
+  int width = 1000;
+  int height = 1000;
+  int scale = 10;
+  
+  pcl::PointCloud<pcl::PointXYZI> cloudOut;
+  cv::Mat cloudProjectionImage;
+
+  try 
+  {
+    // convert pcl cloud to cv image
+    cloudOps_.fromROSMsg(*msg, cloudOut, cloudProjectionImage, width, height, scale);
+
+    cloudProjectionImage_ = cloudProjectionImage.clone();
+
+    if(showCloudInStreams_)
+    {
+      cloudViewer_->removeAllPointClouds(cloudViewPort_);
+      cloudViewer_->addPointCloud<pcl::PointXYZI>(cloudOut.makeShared(), "downsampled", cloudViewPort_);
+    }
+  } 
+  catch (cv_bridge::Exception& e) 
+  {
+    ROS_ERROR("-- EXCEPTION --- CameraFuse::pcInCallback: %s", e.what());
+    logger_->error("- EXCEPTION --- CameraFuse::pcInCallback: {}", e.what());
+    return;
+  }
+  catch(const std::exception& e)
+  {
+    ROS_ERROR("--- EXCEPTION --- CameraFuse::pcInCallback: %s", e.what());
+    logger_->error("- EXCEPTION --- CameraFuse::pcInCallback: {}", e.what());
+  }
+  catch(...)
+  {
+    ROS_ERROR("--- EXCEPTION --- CameraFuse::pcInCallback: -undefined-");
+    logger_->error("--- EXCEPTION --- CameraFuse::pcInCallback: -undefined-");
+  }
+
+  return;
 }
 
 //*****************************************************************************

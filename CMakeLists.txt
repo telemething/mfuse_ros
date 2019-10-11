@@ -246,8 +246,11 @@ target_link_libraries(mfuse_ros_node
 add_executable(mfuse_align
   src/mfuse_align_ros_node.cpp
   src/mfuse_align.cpp
+  src/mfuse_cloud_ops.cpp
+  src/mfuse_logger.cpp
 )
-#add_dependencies(mfuse_align ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+add_dependencies(mfuse_align ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(mfuse_align
   stdc++
   ${catkin_LIBRARIES}

@@ -33,6 +33,9 @@
 #include <message_filters/subscriber.h>
 #include <sensor_msgs/PointCloud2.h>
 
+#include <mfuse_cloud_ops.hpp>
+//#include <mfuse_logger.hpp>
+
 namespace mfuse
 {
 class CameraAlign 
@@ -50,6 +53,7 @@ private:
   std::string irInImageShowName_ = "IR In";
   std::string warpFileName = "thewarp.json";
   std::string fusedImageDisplayName_ = "Fused Image";
+  std::string cloudProjectionDisplayName_ = "Cloud Projection";
 
   bool showCameraInStreams_ = false;
   bool showDebugImages_ = false;
@@ -57,6 +61,9 @@ private:
   bool gotWarp_ = false;
   bool gotRgbImage_ = false;
   bool gotIrImage_ = false;
+  bool showCloudInStreams_ = false;
+
+  CloudOps cloudOps_;
 
   ros::NodeHandle nodeHandle_;
   image_transport::ImageTransport imageTransport_;
@@ -71,22 +78,31 @@ private:
   // ROS subscribers 
   image_transport::Subscriber rgbSubscriber_;
   image_transport::Subscriber irSubscriber_;
+  ros::Subscriber pcInSubscriber_;
+
   boost::shared_mutex mutexRgbCameraImage_;
   boost::shared_mutex mutexIrCameraImage_;
   boost::shared_mutex mutexFusedImage_;
 
   cv_bridge::CvImagePtr rgbImage_;
   cv_bridge::CvImagePtr irImage_;
+  cv::Mat cloudProjectionImage_;
   std_msgs::Header rgbImageHeader_;
   std_msgs::Header irImageHeader_;
+
+  std::shared_ptr<pcl::visualization::PCLVisualizer> cloudViewer_;
+  int cloudViewPort_ = 0;
+  ros::Timer cloudViewerTimer_;
 
   int init();
   bool readParameters();
   void CreateLogger(std::string logDirectory);
   int logloop();
 
+  void cloudViewerTimerCallback(const ros::TimerEvent&);
   void rgbCameraCallback(const sensor_msgs::ImageConstPtr& msg);
   void irCameraCallback(const sensor_msgs::ImageConstPtr& msg);
+  void pcInCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
 
   int readWarp(const std::string filename, cv::Mat& warp);
 	int saveWarp(const std::string fileName, const cv::Mat& warp);
