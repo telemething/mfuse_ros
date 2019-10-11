@@ -39,6 +39,7 @@
 #include <pcl/visualization/cloud_viewer.h>
 
 #include <mfuse_cloud_ops.hpp>
+#include <mfuse_logger.hpp>
 
 // http://wiki.ros.org/pcl_conversions
 
@@ -67,13 +68,7 @@ private:
   bool gotIrImage_ = false;
   bool collectCloudDataStats_ = false;
 
-  //typedef pcl::PointXYZI VPoint;
-  //typedef pcl::PointCloud<VPoint> VPointCloud;
-  //typedef pcl::PCLPointCloud2 VPointCloud;
-
   CloudOps cloudOps_;
-
-  //float maxX = 0, maxY = 0, maxZ = 0, minX = 0, minY = 0, minZ = 0;
 
   ros::NodeHandle nodeHandle_;
   image_transport::ImageTransport imageTransport_;
@@ -104,9 +99,9 @@ private:
   int cloudViewPort_ = 0;
   ros::Timer cloudViewerTimer_;
 
+  Logger MfLogger_;
+
   bool readParameters();
-  void CreateLogger(std::string logDirectory);
-  int logloop();
   int fusionloop();
   int displayloop();
 
