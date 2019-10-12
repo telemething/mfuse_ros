@@ -408,17 +408,18 @@ int CameraAlign::displayloop()
       if(!gotRgbImage_ | !gotIrImage_)
         continue;
 
-	  rectifyManually(irImage_->image, rgbImage_->image);
+	  // temp
+	  //rectifyManually(irImage_->image, rgbImage_->image);
 
-	  break;
+	  //break;
 
-	  /*if(showCloudInStreams_)
+	  if(showCloudInStreams_)
       {
         cv::imshow(cloudProjectionDisplayName_, cloudProjectionImage_);
       }
 
       // wait for a new fused image to appear
-      fusedImageReady_.wait();
+      /*fusedImageReady_.wait();
 
       if(showFusedImage_)
       {
@@ -427,12 +428,12 @@ int CameraAlign::displayloop()
        
         cv::imshow(fusedImageDisplayName_, fusedImage_);
         cv::waitKey(3);
-      }
+      }*/
 
 	  if(showCloudInStreams_ || showFusedImage_)
         cv::waitKey(1);
       else
-        cv::waitKey(100);*/
+        cv::waitKey(100);
 
     }
     catch(const std::exception& e)
@@ -486,10 +487,15 @@ void CameraAlign::pcInCallback(const sensor_msgs::PointCloud2ConstPtr& msg)
 
   try 
   {
-    // convert pcl cloud to cv image
-    cloudOps_.fromROSMsg(*msg, cloudOut, cloudProjectionImage, width, height, scale);
 
-    cloudProjectionImage_ = cloudProjectionImage.clone();
+    // convert pcl cloud to cv image
+    //cloudOps_.fromROSMsg(*msg, cloudOut, cloudProjectionImage, width, height, scale);
+
+    //cloudProjectionImage_ = cloudProjectionImage.clone();
+
+	cloudOps_.add(*msg);
+	cloudOut = cloudOps_.getCurrentCloud();
+	cloudProjectionImage_ = cloudOps_.getCurrentProjectionImage(width, height, scale);
 
     if(showCloudInStreams_)
     {

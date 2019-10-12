@@ -11,6 +11,8 @@ namespace mfuse
 CloudOps::CloudOps()
 {
   collectCloudDataStats_ = false;
+
+  cloudQueueSizeMax_ = 50;
 }
 
 //*****************************************************************************
@@ -70,7 +72,7 @@ void CloudOps::toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud,
         //if(0 < cloud[x].x && 0 < cloud[x].y)
         {
           //X = depth forward, y = width left, z = height up
-          outImage.at<float>((scale * cloud[x].y) + height/2, (scale * cloud[x].z) + width/2) = cloud[x].x;
+          outImage.at<float>((scale * -cloud[x].z) + width/2, (scale * -cloud[x].y) + height/2) = cloud[x].x;
         }
       }
     }
@@ -94,6 +96,80 @@ void CloudOps::fromROSMsg(const sensor_msgs::PointCloud2 &cloud,
 
     // convert pcl cloud to cv image
     toCvImage(cloudOut, outImage, width, height, scale);
+  }
+
+//*****************************************************************************
+//*
+//* Add a LIVOX unorganized point cloud 
+//*
+//******************************************************************************
+
+void CloudOps::add(const sensor_msgs::PointCloud2 &cloud)
+  {
+    pcl::PointCloud<pcl::PointXYZI> cloudOut;
+    pcl::PointCloud<pcl::PointXYZI> cloudPopped;
+
+    // convert ROS cloud to pcl cloud
+    pcl::fromROSMsg(cloud, cloudOut);
+
+    if(cloudQueueSizeCurrent_ == cloudQueueSizeMax_)
+    {
+      cloudPopped = cloudQueue_.front();
+      cloudQueue_.pop_front();
+      cloudQueueSizeCurrent_--;
+    }
+
+    cloudQueue_.push_back(cloudOut);
+    cloudQueueSizeCurrent_++;
+
+    //currentCloud_ += cloudOut;
+
+  }
+
+//*****************************************************************************
+//*
+//* Add a LIVOX unorganized point cloud 
+//*
+//******************************************************************************
+
+void CloudOps::set(const sensor_msgs::PointCloud2 &cloud)
+  {
+    // set the current cloud
+    pcl::fromROSMsg(cloud, currentCloud_);
+  }
+
+//*****************************************************************************
+//*
+//*  
+//*
+//******************************************************************************
+
+pcl::PointCloud<pcl::PointXYZI> CloudOps::getCurrentCloud()
+  {
+    currentCloud_.clear();
+
+    for(auto index = cloudQueue_.begin(); index != cloudQueue_.end(); index++)
+    {
+      currentCloud_ += *index;
+    }
+
+    // return the current cloud
+    return currentCloud_;
+  }
+
+//*****************************************************************************
+//*
+//*  
+//*
+//******************************************************************************
+
+cv::Mat CloudOps::getCurrentProjectionImage(int width, int height, int scale)
+  {
+    // convert pcl cloud to cv image
+    toCvImage(currentCloud_, currentProjectionImage_, width, height, scale);
+
+    // return the current projection image
+    return currentProjectionImage_;
   }
 
 } // namespace mfuse
