@@ -59,7 +59,11 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   nav_msgs
   tf
+  octomap_msgs
 )
+
+find_package(OCTOMAP REQUIRED)
+
 ##   * add "message_runtime" and every package in MSG_DEP_SET to
 ##     catkin_package(CATKIN_DEPENDS ...)
 ##   * uncomment the add_*_files sections below as needed
@@ -139,6 +143,7 @@ catkin_package(
 include_directories(
   include ${catkin_INCLUDE_DIRS}
   ${PROJECT_SOURCE_DIR}/include
+  ${OCTOMAP_INCLUDE_DIRS}
 # include
 # ${catkin_INCLUDE_DIRS}
 )
@@ -239,6 +244,7 @@ target_link_libraries(mfuse_ros_node
   ${Boost_LIBRARIES}
   ${OpenCV_LIBRARIES}
   ${PCL_LIBRARIES}
+  ${OCTOMAP_LIBRARIES}
 )
 
 # mfuse_align 
@@ -248,6 +254,7 @@ add_executable(mfuse_align
   src/mfuse_align.cpp
   src/mfuse_cloud_ops.cpp
   src/mfuse_logger.cpp
+  src/colmap.cpp
 )
 
 add_dependencies(mfuse_align ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
@@ -258,6 +265,7 @@ target_link_libraries(mfuse_align
   ${Boost_LIBRARIES}
   ${OpenCV_LIBRARIES}
   ${PCL_LIBRARIES}
+  ${OCTOMAP_LIBRARIES}
 )
 
 # Create logs directory

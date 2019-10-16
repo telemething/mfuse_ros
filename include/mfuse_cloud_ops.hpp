@@ -23,6 +23,11 @@
 #include <pcl/visualization/cloud_viewer.h>
 #pragma GCC diagnostic pop
 
+#include <octomap/octomap.h>
+#include <octomap/OcTree.h>
+#include <sensor_msgs/point_cloud2_iterator.h>
+//#include <octomap_ros/conversions.h>
+
 namespace mfuse
 {
 class CloudOps 
@@ -41,6 +46,7 @@ public:
   pcl::PointCloud<pcl::PointXYZI> getCurrentCloud();
   cv::Mat getCurrentProjectionImage(int width, int height, int scale);
 
+
   void fromROSMsg(const sensor_msgs::PointCloud2& cloud, 
     pcl::PointCloud<pcl::PointXYZI>& cloudOut,
     cv::Mat& outImage, int width, int height, int scale);
@@ -55,8 +61,9 @@ private:
   int cloudQueueSizeCurrent_ = 0;
 
   bool collectCloudDataStats_ = false;
+  bool autoScaleColorMap_ = true;
   cv::Mat currentProjectionImage_;
 
-  float maxX = 0, maxY = 0, maxZ = 0, minX = 0, minY = 0, minZ = 0;
+  float maxX = 0, maxY = 0, maxZ = 0, minX = 255, minY = 255, minZ = 255;
 }; // class CameraAlign   
 } // namespace mfuse

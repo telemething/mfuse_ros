@@ -271,6 +271,86 @@ int CameraAlign::init()
 	//
 	//*****************************************************************************
 
+	/*void CameraAlign::combineImages(const cv::Mat& im1, const cv::Mat& im2, 
+		const cv::Mat& im3, cv::Mat& imCombined)
+	{
+		cv::Mat combined( std::max(im1.size().height, im2.size().height),
+			im1.size().width + im2.size().width, CV_8UC3);
+
+		matchPointEndWidthOffset = im1.size().width;
+
+		printf("combined frame c r : %i %i\r\n", combined.cols, combined.rows);
+
+		cv::Mat left_roi(combined, cv::Rect(0, 0, im1.size().width, im1.size().height));
+		im1.copyTo(left_roi);
+		cv::Mat right_roi(combined, cv::Rect(im1.size().width, 0, im2.size().width, im2.size().height));
+		im2.copyTo(right_roi);
+
+		imCombined = combined;
+	}*/
+
+	/*void CameraAlign::combineImages(const cv::Mat& im1, const cv::Mat& im2, 
+		const cv::Mat& im3, cv::Mat& imCombined)
+	{
+		int topHight = std::max(im1.size().height, im2.size().height);
+		int width = std::max(im1.size().width + im2.size().width, im3.size().width);
+
+		cv::Mat combined( topHight + im3.size().height,	width, CV_8UC3);
+
+		matchPointEndWidthOffset = im1.size().width;
+
+		printf("combined frame c r : %i %i\r\n", combined.cols, combined.rows);
+
+		cv::Mat left_roi(combined, cv::Rect(0, 0, im1.size().width, im1.size().height));
+		im1.copyTo(left_roi);
+		cv::Mat right_roi(combined, cv::Rect(im1.size().width, 0, im2.size().width, im2.size().height));
+		im2.copyTo(right_roi);
+		cv::Mat bottom_roi(combined, cv::Rect(0, topHight, im3.size().width, im3.size().height));
+		im3.copyTo(bottom_roi);
+
+		imCombined = combined;
+	}*/
+
+	void CameraAlign::combineImages(const cv::Mat& im1, const cv::Mat& im2, 
+		const cv::Mat& im3, cv::Mat& imCombined)
+	{
+		int topHight = im3.size().height;
+		int width = im3.size().width;
+
+		cv::Mat combined( topHight,	width, CV_8UC3);
+
+		int i3chan = im3.channels();
+		int comchan = combined.channels();
+
+		//matchPointEndWidthOffset = im1.size().width;
+
+		printf("combined frame c r : %i %i\r\n", combined.cols, combined.rows);
+
+		//cv::Mat left_roi(combined, cv::Rect(0, 0, im1.size().width, im1.size().height));
+		//im1.copyTo(left_roi);
+		//cv::Mat right_roi(combined, cv::Rect(im1.size().width, 0, im2.size().width, im2.size().height));
+		//im2.copyTo(right_roi);
+
+		//imshowimshow("wut1", combined);
+
+		cv::Mat bottom_roi = combined(cv::Rect(0, 0, im3.size().width, im3.size().height));
+		im3.copyTo(bottom_roi);
+
+		//im3.copyTo(combined);
+
+		//imshow("wut2", combined);
+
+		//colormap::Jet jt;
+
+		combined.copyTo(imCombined);
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
 	cv::Mat CameraAlign::calculateHomography(std::vector<matchPointType> matchPoints)
 	{
 		std::vector<cv::Point2f> begin, end;
@@ -399,6 +479,8 @@ int CameraAlign::displayloop()
 	  cv::createTrackbar("Color", fusedImageDisplayName_, &iColorAlpha, 100);
   }*/
 
+  cv::Mat imCombined;
+
   while(true)
   {     
     try
@@ -417,6 +499,10 @@ int CameraAlign::displayloop()
       {
         cv::imshow(cloudProjectionDisplayName_, cloudProjectionImage_);
       }
+
+	  combineImages(irImage_->image, rgbImage_->image, cloudProjectionImage_, imCombined);
+
+	  cv::imshow("TTTTemp", imCombined);
 
       // wait for a new fused image to appear
       /*fusedImageReady_.wait();
