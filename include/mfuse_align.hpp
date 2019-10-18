@@ -110,6 +110,8 @@ private:
 	void getSideBySideImage(const cv::Mat& im1, const cv::Mat& im2, 
     cv::Mat& imCombined, const std::string windowName);
   void combineImages(const cv::Mat& im1, const cv::Mat& im2, 
+		cv::Mat& imCombined);
+  void combineImages(const cv::Mat& im1, const cv::Mat& im2, 
 		const cv::Mat& im3, cv::Mat& imCombined);
 	cv::Mat calculateHomography(std::vector<matchPointType> matchPoints);
 	void rectifyManually(cv::Mat& im1, cv::Mat& im2);

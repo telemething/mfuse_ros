@@ -12,8 +12,9 @@ CloudOps::CloudOps()
 {
   collectCloudDataStats_ = false;
   autoScaleColorMap_ = true;
-
   cloudQueueSizeMax_ = 50;
+
+  Colorize(true);
 }
 
 //*****************************************************************************
@@ -24,6 +25,22 @@ CloudOps::CloudOps()
 
 CloudOps::~CloudOps()
 {
+}
+
+//*****************************************************************************
+//*
+//*
+//*
+//******************************************************************************
+
+void CloudOps::Colorize(bool active)
+{
+  if(active)
+  {
+    colmap_ = colmap::getColorMap(colmap::ColMap::ColormapTypes::COLORMAP_JET);
+    colorize_ = true;
+  }
+    colorize_ = false;
 }
 
 /*inline
@@ -42,55 +59,6 @@ void toROSMsg(const sensor_msgs::PointCloud2 &cloud, sensor_msgs::Image &image)
 //pcl::toROSMsg (*msg, cloudInRosImage_); 
 //cloudInImage_ = cv_bridge::toCvCopy(cloudInRosImage_, sensor_msgs::image_encodings::MONO16);
 
-//*****************************************************************************
-//*
-//* Convert a LIVOX unorganized point cloud to a cv::Mat image
-//*
-//******************************************************************************
-
-/*void CloudOps::toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud, 
-    cv::Mat& outImage, int width = 1000, int height = 1000, int scale = 10)
-  {  
-    // allocate image
-    outImage.create(height,width,CV_32F);
-    // set all values to 0
-    outImage = 0;
-
-    for (size_t y = 0; y < cloud.height; y++)
-    {
-      for (size_t x = 0; x < cloud.width; x++)
-      {
-        if(collectCloudDataStats_)
-        {
-          maxX = std::max(maxX,cloud[x].x);
-          maxY = std::max(maxY,cloud[x].y);
-          maxZ = std::max(maxZ,cloud[x].z);
-          minX = std::min(minX,cloud[x].x);
-          minY = std::min(minY,cloud[x].y);
-          minZ = std::min(minZ,cloud[x].z);
-        }
-
-        //if(0 < cloud[x].x && 0 < cloud[x].y)
-        {
-          //X = depth forward, y = width left, z = height up
-          outImage.at<float>((scale * -cloud[x].z) + width/2, (scale * -cloud[x].y) + height/2) = cloud[x].x;
-        }
-      }
-    }
-
-    //outImage.convertTo(outImage,CV_8U);
-    outImage.convertTo(outImage,CV_8UC3);
-
-    //logger_->warn("[xy]: {}, {}, {} : {}, {}, {}", maxX, maxY, maxZ, minX, minY, minZ);
-  }*/
-
-struct theStruct
-{
-  uchar d1;
-  uchar d2;
-  uchar d3;
-  uchar d4;
-};
 
 //*****************************************************************************
 //*
@@ -98,16 +66,24 @@ struct theStruct
 //*
 //******************************************************************************
 
-/*void CloudOps::toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud, 
+void CloudOps::toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud, 
     cv::Mat& outImage, int width = 1000, int height = 1000, int scale = 10)
-  {  
+  { 
+    bool colorizeLUT = true;
+    float intensityScale = 1; 
+
     // allocate image
     outImage.create(height,width,CV_8UC3);
     // set all values to 0
     outImage = 0;
 
-    cv::Vec3b theColor;
+    if(autoScaleColorMap_)
+    {
+      if(0 < maxX)
+        intensityScale = 255 / maxX;
+    }
 
+    cv::Vec3b theColor;
     theColor[0] = 255;
     theColor[1] = 125;
     theColor[2] = 125;
@@ -121,53 +97,49 @@ struct theStruct
           maxX = std::max(maxX,cloud[x].x);
           maxY = std::max(maxY,cloud[x].y);
           maxZ = std::max(maxZ,cloud[x].z);
-          minX = std::min(minX,cloud[x].x);
+          if(0 < cloud[x].x)
+            minX = std::min(minX,cloud[x].x);
           minY = std::min(minY,cloud[x].y);
           minZ = std::min(minZ,cloud[x].z);
         }
 
+        if(autoScaleColorMap_)
+        {
+          maxX = std::max(maxX,cloud[x].x);
+
+          if(0 < cloud[x].x)
+            minX = std::min(minX,cloud[x].x);
+        }
+
+        if(colorizeLUT)
+          theColor = colmap_->_lut.at<cv::Vec3b>(0,cloud[x].x * intensityScale);
+
         //if(0 < cloud[x].x && 0 < cloud[x].y)
         {
-          //X = depth forward, y = width left, z = height up
-          //outImage.at<float>((scale * -cloud[x].z) + width/2, (scale * -cloud[x].y) + height/2) = cloud[x].x;
-
-          //uint8_t * pixel = &(msg.data[y * msg.step + x * 3]);
-          //memcpy (pixel, &cloud (x, y).rgb, 3 * sizeof(uint8_t));
-
-          //outImage.at<float>((scale * -cloud[x].z) + width/2, (scale * -cloud[x].y) + height/2) = cloud[x].x;
-
-          auto pixel = &outImage.at<cv::Vec3b>((scale * -cloud[x].z) + width/2, (scale * -cloud[x].y) + height/2);
-
+          auto pixel = &outImage.at<cv::Vec3b>((scale * -cloud[x].z) + width/2, 
+            (scale * -cloud[x].y) + height/2);
           memcpy( pixel, &theColor, 3 * sizeof(uint8_t));
-
-          //outImage.at<cv::Vec3b>((scale * -cloud[x].z) + width/2, (scale * -cloud[x].y) + height/2) = theColor;
         }
       }
     }
+  }
 
-    //outImage.convertTo(outImage,CV_8U);
-    //outImage.convertTo(outImage,CV_8UC3);
-
-    //example: convert ROS cloud to ROS image
-    //pcl::toROSMsg (*msg, cloudInRosImage_); 
-
-    //logger_->warn("[xy]: {}, {}, {} : {}, {}, {}", maxX, maxY, maxZ, minX, minY, minZ);
-  }*/
-
-  //*****************************************************************************
+//*****************************************************************************
 //*
-//* Convert a LIVOX unorganized point cloud to a cv::Mat image
+//* Convert a LIVOX unorganized point cloud to a cv::Mat image. This duffers from
+//* toCvImage in that it creates a grayscale image and colorizes that instead
+//* of colorizing the points from the cloud directly
 //*
 //******************************************************************************
 
-void CloudOps::toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud, 
-    cv::Mat& outImage, int width = 1000, int height = 1000, int scale = 10)
+void CloudOps::toCvImage2(const pcl::PointCloud<pcl::PointXYZI>& cloud, 
+    cv::Mat& outImage, int width, int height, int scale)
   {  
     cv::Mat intensityImage;
     float intensityScale = 1;
 
     // allocate image
-    intensityImage.create(height,width,CV_8UC1);
+    intensityImage.create(height,width,CV_8U);
     // set all values to 0
     intensityImage = 0;
 
@@ -203,18 +175,16 @@ void CloudOps::toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud,
         //if(0 < cloud[x].x && 0 < cloud[x].y)
         {
           //X = depth forward, y = width left, z = height up
-          intensityImage.at<uchar>((scale * -cloud[x].z) + width/2, (scale * -cloud[x].y) + height/2) = cloud[x].x * intensityScale;
+          intensityImage.at<uchar>((scale * -cloud[x].z) + width/2, 
+            (scale * -cloud[x].y) + height/2) = cloud[x].x * intensityScale;
         }
       }
     }
 
-
-    //outImage.convertTo(outImage,CV_8U);
-    //outImage.convertTo(outImage,CV_8UC3);
-
-    cv::applyColorMap(intensityImage, outImage, cv::ColormapTypes::COLORMAP_RAINBOW);
-
-    //logger_->warn("[xy]: {}, {}, {} : {}, {}, {}", maxX, maxY, maxZ, minX, minY, minZ);
+    if(colorize_)
+      cv::applyColorMap(intensityImage, outImage, cv::ColormapTypes::COLORMAP_RAINBOW);
+    else
+      intensityImage.convertTo(outImage,CV_8UC3);
   }
 
 
