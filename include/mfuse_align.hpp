@@ -44,6 +44,7 @@ class CameraAlign
 public:
 
   struct matchPointType { cv::Point2i begin; cv::Point2i end; };
+  struct matchPointType2 { cv::Point2i cloud; cv::Point2i visible; cv::Point2i ir; };
   explicit CameraAlign(ros::NodeHandle nh);
   ~CameraAlign();
 
@@ -67,6 +68,7 @@ private:
   bool showCloudInStreams_ = false;
 
   CloudOps cloudOps_;
+  std::vector<matchPointType2> matchPoints_;
 
   ros::NodeHandle nodeHandle_;
   image_transport::ImageTransport imageTransport_;
@@ -119,6 +121,7 @@ private:
 		cv::Mat& imCombined);
   void combineImages(const cv::Mat& im1, const cv::Mat& im2, 
 		const cv::Mat& im3, cv::Mat& imCombined);
+  void drawMatchPoints(const cv::Mat& img, std::vector<CameraAlign::matchPointType2>& points);
 	cv::Mat calculateHomography(std::vector<matchPointType> matchPoints);
 	void rectifyManually(cv::Mat& im1, cv::Mat& im2, cv::Mat& im3);
   int displayloop();

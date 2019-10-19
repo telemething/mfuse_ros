@@ -19,8 +19,14 @@ boost::interprocess::interprocess_semaphore irImageReady_(0);
 cv::Mat combinedImage;
 CameraAlign::matchPointType matchPoint;
 std::vector<CameraAlign::matchPointType> matchPoints;
+CameraAlign::matchPointType2 matchPoint2;
+std::vector<CameraAlign::matchPointType2> matchPoints2;
 std::string rectifyWindowsName = "rectify2";
 int matchPointEndWidthOffset = 0;
+
+cv::Rect irRoiRect;
+cv::Rect visibleRoiRect;
+cv::Rect cloudRoiRect;
 
 //*****************************************************************************
 //*
@@ -190,7 +196,77 @@ int CameraAlign::init()
 	//
 	//*****************************************************************************
 
-	static void manualRectifyMouseCallback(int event, int x, int y, int flags, void* userdata)
+	int circleRadius_ = 3;
+	int circleThickness_ = 1;
+
+	static inline void drawMatchPoint(const cv::Mat& img, cv::Point2i& pnt)
+	{
+		cv::circle(img, pnt, circleRadius_, 
+			cv::Scalar(0, 255, 0), circleThickness_);
+		cv::circle(img, pnt, circleRadius_+1, 
+			cv::Scalar(0, 0, 255), circleThickness_);
+
+	}
+
+  	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	void CameraAlign::drawMatchPoints(const cv::Mat& img, 
+		std::vector<CameraAlign::matchPointType2>& points)
+	{
+		for (std::vector<CameraAlign::matchPointType2>::iterator it = points.begin(); 
+			it != points.end(); ++it)
+		{
+			drawMatchPoint(img, it->cloud);
+			drawMatchPoint(img, it->ir);
+			drawMatchPoint(img, it->visible);
+		}
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	static void addMatchPoint(cv::Point2i hitPoint)
+	{
+		if( irRoiRect.contains(hitPoint) )
+		{
+			matchPoint2.ir = hitPoint;
+		}
+		else if( visibleRoiRect.contains(hitPoint) )
+		{
+			matchPoint2.visible = hitPoint;
+		}
+		else if( cloudRoiRect.contains(hitPoint) )
+		{
+			matchPoint2.cloud = hitPoint;
+		}
+
+		// weve got a trio, push them
+		if(matchPoint2.ir.x > 0 & matchPoint2.visible.x > 0 & matchPoint2.cloud.x > 0)
+		{
+			matchPoints2.push_back(matchPoint2);
+
+			matchPoint2.ir = cv::Point2i(0,0);
+			matchPoint2.visible = matchPoint2.ir;
+			matchPoint2.cloud = matchPoint2.ir;
+
+			printf("--- matchpoint set complete ---\r\n");
+		}
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	/*static void manualRectifyMouseCallback(int event, int x, int y, int flags, void* userdata)
 	{
 		if (event == cv::MouseEventTypes::EVENT_LBUTTONDOWN)
 		{
@@ -216,11 +292,89 @@ int CameraAlign::init()
 			printf("Added matchPoint (%i,%i),(%i,%i)\r\n",
 				matchPoint.begin.x, matchPoint.begin.y, matchPoint.end.x, matchPoint.end.y);
 		}
+	}*/
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	int lastMouseEvent_ = cv::MouseEventTypes::EVENT_MOUSEMOVE;
+
+	static void manualRectifyMouseCallback(int event, int x, int y, int flags, void* userdata)
+	{
+		if (event == cv::MouseEventTypes::EVENT_LBUTTONUP)
+		{
+			cv::Point2i hitPoint(x,y);
+
+			if(lastMouseEvent_ == cv::MouseEventTypes::EVENT_LBUTTONDOWN)
+			printf("--- click (%i,%i)\r\n",x,y);
+			cv::displayStatusBar(rectifyWindowsName, "--- click ---", 0);
+
+			//cv::circle(hitPoint,)
+
+			//matchPointType2> matchPoints_
+
+			addMatchPoint(hitPoint);
+		}
+
+		lastMouseEvent_ = event;
 	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
 
 	static void clearButtonCallback(int state, void* userdata)
 	{
+		matchPoints2.clear();
+	}
 
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	static void fuseButtonCallback(int state, void* userdata)
+	{
+
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	static void acceptButtonCallback(int state, void* userdata)
+	{
+
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	static void quitButtonCallback(int state, void* userdata)
+	{
+
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	static void undoLastButtonCallback(int state, void* userdata)
+	{
+		matchPoints2.pop_back();
 	}
 
 	//*****************************************************************************
@@ -237,7 +391,7 @@ int CameraAlign::init()
 
 		matchPointEndWidthOffset = im1.size().width;
 
-		printf("combined frame c r : %i %i\r\n", combined.cols, combined.rows);
+		//printf("combined frame c r : %i %i\r\n", combined.cols, combined.rows);
 
 		cv::Mat left_roi(combined, cv::Rect(0, 0, im1.size().width, im1.size().height));
 		im1.copyTo(left_roi);
@@ -249,16 +403,20 @@ int CameraAlign::init()
 		if (0 < windowName.length())
 		{
 			//namedWindow("aaa1", WINDOW_GUI_EXPANDED);
-			cv::namedWindow(windowName.c_str());
+			cv::namedWindow(windowName.c_str(), cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
 			cv::createTrackbar("Thermal", windowName.c_str(), &iThermalAlpha, 100);
 	  		cv::createTrackbar("Color", windowName.c_str(), &iColorAlpha, 100);
 
+			cv::createButton("Undo Last", undoLastButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
 			cv::createButton("Clear", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
-			cv::createButton("Fuse", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
-			cv::createButton("Accept", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
-			cv::createButton("Quit", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+			cv::createButton("Fuse", fuseButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+			cv::createButton("Accept", acceptButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+			cv::createButton("Quit", quitButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
 
 			cv::setMouseCallback(windowName.c_str(), manualRectifyMouseCallback, this);
+			cv::displayStatusBar(windowName.c_str(), "--- select a thing ---", 0);
+
+
 			cv::imshow(windowName.c_str(), combined);
 		}
 	}
@@ -283,21 +441,25 @@ int CameraAlign::init()
 			}
 			{
 				//namedWindow("aaa1", WINDOW_GUI_EXPANDED);
-				cv::namedWindow(windowName.c_str());
+				cv::namedWindow(windowName.c_str(), cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
 				cv::createTrackbar("Thermal", windowName.c_str(), &iThermalAlpha, 100);
 				cv::createTrackbar("Color", windowName.c_str(), &iColorAlpha, 100);
 
+				cv::createButton("Undo Last", undoLastButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
 				cv::createButton("Clear", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
-				cv::createButton("Fuse", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
-				cv::createButton("Accept", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
-				cv::createButton("Quit", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+				cv::createButton("Fuse", fuseButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+				cv::createButton("Accept", acceptButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+				cv::createButton("Quit", quitButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
 
-				cv::setMouseCallback(windowName.c_str(), manualRectifyMouseCallback, this);		
+				cv::setMouseCallback(windowName.c_str(), manualRectifyMouseCallback, this);	
+				cv::displayStatusBar(windowName.c_str(), "--- select first point ---", 0);
+
 				alignWindowCreated_ = true;
 			}
 
 		}
 			
+		drawMatchPoints(imCombined, matchPoints2);
 		cv::imshow(windowName.c_str(), imCombined);
 	}
 
@@ -316,7 +478,7 @@ int CameraAlign::init()
 
 		matchPointEndWidthOffset = im1.size().width;
 
-		printf("combined frame c r : %i %i\r\n", combined.cols, combined.rows);
+		//printf("combined frame c r : %i %i\r\n", combined.cols, combined.rows);
 
 		cv::Mat left_roi(combined, cv::Rect(0, 0, im1.size().width, im1.size().height));
 		im1.copyTo(left_roi);
@@ -332,25 +494,40 @@ int CameraAlign::init()
 	//
 	//*****************************************************************************
 
-	void CameraAlign::combineImages(const cv::Mat& im1, const cv::Mat& im2, 
-		const cv::Mat& im3, cv::Mat& imCombined)
+	void CameraAlign::combineImages(const cv::Mat& irImg, const cv::Mat& visImg, 
+		const cv::Mat& cloudImg, cv::Mat& imCombined)
 	{
-		int topHight = std::max(im1.size().height, im2.size().height);
-		int width = std::max(im1.size().width + im2.size().width, im3.size().width);
+		int topHight = std::max(irImg.size().height, visImg.size().height);
+		int width = std::max(irImg.size().width + visImg.size().width, cloudImg.size().width);
 
-		cv::Mat combined( topHight + im3.size().height,	width, CV_8UC3);
+		cv::Mat combined( topHight + cloudImg.size().height,	width, CV_8UC3);
 		combined = 0;
 
-		matchPointEndWidthOffset = im1.size().width;
+		matchPointEndWidthOffset = irImg.size().width;
 
-		printf("combined frame c r : %i %i\r\n", combined.cols, combined.rows);
+		//printf("combined frame c r : %i %i\r\n", combined.cols, combined.rows);
 
-		cv::Mat left_roi(combined, cv::Rect(0, 0, im1.size().width, im1.size().height));
-		im1.copyTo(left_roi);
-		cv::Mat right_roi(combined, cv::Rect(im1.size().width, 0, im2.size().width, im2.size().height));
-		im2.copyTo(right_roi);
-		cv::Mat bottom_roi(combined, cv::Rect(0, topHight, im3.size().width, im3.size().height));
-		im3.copyTo(bottom_roi);
+		cv::Mat irRoi(combined, cv::Rect(0, 0, irImg.size().width, irImg.size().height));
+		irImg.copyTo(irRoi);
+		cv::Mat visRoi(combined, cv::Rect(irImg.size().width, 0, visImg.size().width, visImg.size().height));
+		visImg.copyTo(visRoi);
+		cv::Mat cloudRoi(combined, cv::Rect(0, topHight, cloudImg.size().width, cloudImg.size().height));
+		cloudImg.copyTo(cloudRoi);
+
+		irRoiRect.x = 0;
+		irRoiRect.y = 0;
+		irRoiRect.height = irImg.size().height;
+		irRoiRect.width = irImg.size().width;
+
+		visibleRoiRect.x = irRoiRect.width;
+		visibleRoiRect.y = 0;
+		visibleRoiRect.height = visImg.size().height;
+		visibleRoiRect.width = visImg.size().width;
+
+		cloudRoiRect.x = 0;
+		cloudRoiRect.y = topHight;
+		cloudRoiRect.height = cloudImg.size().height;
+		cloudRoiRect.width = cloudImg.size().width;
 
 		imCombined = combined;
 	}
