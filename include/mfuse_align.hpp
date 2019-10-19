@@ -62,6 +62,8 @@ private:
   bool gotWarp_ = false;
   bool gotRgbImage_ = false;
   bool gotIrImage_ = false;
+  bool gotcloudProjectionImage_ = false;  
+  bool alignWindowCreated_ = false;
   bool showCloudInStreams_ = false;
 
   CloudOps cloudOps_;
@@ -107,14 +109,18 @@ private:
 
   int readWarp(const std::string filename, cv::Mat& warp);
 	int saveWarp(const std::string fileName, const cv::Mat& warp);
+
 	void getSideBySideImage(const cv::Mat& im1, const cv::Mat& im2, 
     cv::Mat& imCombined, const std::string windowName);
+  void showAlignWindow(const cv::Mat& im1, const cv::Mat& im2, 
+		const cv::Mat& im3, cv::Mat& imCombined, const std::string windowName);
+
   void combineImages(const cv::Mat& im1, const cv::Mat& im2, 
 		cv::Mat& imCombined);
   void combineImages(const cv::Mat& im1, const cv::Mat& im2, 
 		const cv::Mat& im3, cv::Mat& imCombined);
 	cv::Mat calculateHomography(std::vector<matchPointType> matchPoints);
-	void rectifyManually(cv::Mat& im1, cv::Mat& im2);
+	void rectifyManually(cv::Mat& im1, cv::Mat& im2, cv::Mat& im3);
   int displayloop();
 
 }; // class CameraAlign   

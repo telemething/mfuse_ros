@@ -248,8 +248,6 @@ int CameraAlign::init()
 
 		if (0 < windowName.length())
 		{
-			//auto winName = windowName.c_str();
-			//auto winName = "aaa1";
 			//namedWindow("aaa1", WINDOW_GUI_EXPANDED);
 			cv::namedWindow(windowName.c_str());
 			cv::createTrackbar("Thermal", windowName.c_str(), &iThermalAlpha, 100);
@@ -271,11 +269,50 @@ int CameraAlign::init()
 	//
 	//*****************************************************************************
 
+	void CameraAlign::showAlignWindow(const cv::Mat& im1, const cv::Mat& im2, 
+		const cv::Mat& im3, cv::Mat& imCombined, const std::string windowName)
+	{
+		combineImages(im1, im2, im3, imCombined);
+
+		if(!alignWindowCreated_)
+		{
+			if (0 == windowName.length())
+			{
+				logger_->error("CameraAlign::showAlignWindow() : windowName.length = 0");
+				return;
+			}
+			{
+				//namedWindow("aaa1", WINDOW_GUI_EXPANDED);
+				cv::namedWindow(windowName.c_str());
+				cv::createTrackbar("Thermal", windowName.c_str(), &iThermalAlpha, 100);
+				cv::createTrackbar("Color", windowName.c_str(), &iColorAlpha, 100);
+
+				cv::createButton("Clear", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+				cv::createButton("Fuse", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+				cv::createButton("Accept", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+				cv::createButton("Quit", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+
+				cv::setMouseCallback(windowName.c_str(), manualRectifyMouseCallback, this);		
+				alignWindowCreated_ = true;
+			}
+
+		}
+			
+		cv::imshow(windowName.c_str(), imCombined);
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
 	void CameraAlign::combineImages(const cv::Mat& im1, const cv::Mat& im2, 
 		cv::Mat& imCombined)
 	{
 		cv::Mat combined( std::max(im1.size().height, im2.size().height),
 			im1.size().width + im2.size().width, CV_8UC3);
+		combined = 0;
 
 		matchPointEndWidthOffset = im1.size().width;
 
@@ -302,6 +339,7 @@ int CameraAlign::init()
 		int width = std::max(im1.size().width + im2.size().width, im3.size().width);
 
 		cv::Mat combined( topHight + im3.size().height,	width, CV_8UC3);
+		combined = 0;
 
 		matchPointEndWidthOffset = im1.size().width;
 
@@ -345,13 +383,15 @@ int CameraAlign::init()
 
 	bool staticRectifyImages_ = false;
 
-	void CameraAlign::rectifyManually(cv::Mat& im1, cv::Mat& im2)
+	void CameraAlign::rectifyManually(cv::Mat& im1, cv::Mat& im2, cv::Mat& im3)
 	{
 		cv::Mat imCombined, homography, imFitted, imBlended, ROI;
 
 		double alpha = 0.5; double beta = 1 - alpha;
 
-		getSideBySideImage(im1, im2, imCombined, rectifyWindowsName);
+		//getSideBySideImage(im1, im2, imCombined, rectifyWindowsName);
+
+		showAlignWindow(im1, im2, im3, imCombined, rectifyWindowsName);
 
 		combinedImage = imCombined.clone();
 
@@ -359,9 +399,10 @@ int CameraAlign::init()
 
 		while (true)
 		{
-			/* leave it for another time
+			// leave it for another time
 			if(!staticRectifyImages_)
 			{
+				/*
 				//{
 				// lock the images
 					boost::shared_lock<boost::shared_mutex> lockRgb(mutexRgbCameraImage_);
@@ -370,23 +411,11 @@ int CameraAlign::init()
 					//irImage_->image.copyTo(im1);
 					//rgbImage_->image.copyTo(im2);
 				//}
+				*/
 
-				cv::Mat combined( std::max(im1.size().height, im2.size().height),
-					im1.size().width + im2.size().width, CV_8UC3);
-
-				//matchPointEndWidthOffset = im1.size().width;
-
-				//printf("combined frame c r : %i %i\r\n", combined.cols, combined.rows);
-
-				cv::Mat left_roi(combined, cv::Rect(0, 0, im1.size().width, im1.size().height));
-				im1.copyTo(left_roi);
-				cv::Mat right_roi(combined, cv::Rect(im1.size().width, 0, im2.size().width, im2.size().height));
-				im2.copyTo(right_roi);
-
-				imCombined = combined;
-
-				cv::imshow(rectifyWindowsName.c_str(), combined);
-			}*/
+				showAlignWindow(irImage_->image, rgbImage_->image, 
+					cloudProjectionImage_, imCombined, rectifyWindowsName);
+			}
 
 			int keyPressed = cv::waitKey(30);
 
@@ -459,11 +488,11 @@ int CameraAlign::displayloop()
     {
 	  imageReady_.wait();
 
-      if(!gotRgbImage_ | !gotIrImage_)
+      if(!gotRgbImage_ | !gotIrImage_ | !gotcloudProjectionImage_)
         continue;
 
-	  // temp
-	  //rectifyManually(irImage_->image, rgbImage_->image);
+	  //// temp
+	  rectifyManually(irImage_->image, rgbImage_->image, cloudProjectionImage_);
 
 	  //break;
 
@@ -472,9 +501,11 @@ int CameraAlign::displayloop()
         cv::imshow(cloudProjectionDisplayName_, cloudProjectionImage_);
       }
 
-	  combineImages(irImage_->image, rgbImage_->image, cloudProjectionImage_, imCombined);
+	  //combineImages(irImage_->image, rgbImage_->image, cloudProjectionImage_, imCombined);
+	  //cv::imshow("Test Combined Image", imCombined);
 
-	  cv::imshow("Test Combined Image", imCombined);
+	  showAlignWindow(irImage_->image, rgbImage_->image, 
+	  	cloudProjectionImage_, imCombined, rectifyWindowsName);
 
       // wait for a new fused image to appear
       /*fusedImageReady_.wait();
@@ -554,6 +585,7 @@ void CameraAlign::pcInCallback(const sensor_msgs::PointCloud2ConstPtr& msg)
 	cloudOps_.add(*msg);
 	cloudOut = cloudOps_.getCurrentCloud();
 	cloudProjectionImage_ = cloudOps_.getCurrentProjectionImage(width, height, scale);
+	gotcloudProjectionImage_ = true;
 
     if(showCloudInStreams_)
     {
