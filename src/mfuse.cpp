@@ -150,13 +150,11 @@ int CameraFuse::init()
 
   // initialize or load the warp matrix
 	if (warpType_ == cv::MOTION_HOMOGRAPHY)
-		warpMatrix = cv::Mat::eye(3, 3, CV_32F);
+		warpMatrix_ = cv::Mat::eye(3, 3, CV_32F);
 	else
-		warpMatrix = cv::Mat::eye(2, 3, CV_32F);
+		warpMatrix_ = cv::Mat::eye(2, 3, CV_32F);
 
-	gotWarp_ = FuseOps::readWarpFile(warpFileName, warpMatrix);
-
-
+	gotWarp_ = FuseOps::readWarpFile(warpFileName, warpMatrix_);
 }
 
 //*****************************************************************************
@@ -174,7 +172,10 @@ int CameraFuse::fusionloop()
 	ros::Rate sleepTime(updateFrequency);
 	
 	cv::Mat imWarped, imColorized, roiIncludeVisibleImage, roiExcludeVisibleImage, irImage, rgbImage;
+  std::vector<cv::Point2f> warpedBBox;
+  cv::Mat roiIncludeMask, roiExcludeMask;
 
+  FuseOps fo;
 
   while(true)
   {     
@@ -182,8 +183,6 @@ int CameraFuse::fusionloop()
     {
       // wait for a new IR or RGB image to appear
       imageReady_.wait();
-      //rgbImageReady_.wait();
-      //irImageReady_.wait();
 
       if(!gotRgbImage_ | !gotIrImage_)
         continue;
@@ -198,14 +197,6 @@ int CameraFuse::fusionloop()
         rgbImage = rgbImage_->image.clone();
       }
 
-      if(!gotMasks)
-      {
-        warpedBBox = FuseOps::getTransposedBBox(irImage, warpMatrix);
-        roiIncludeMask = FuseOps::getMask(rgbImage, warpedBBox, true);
-        bitwise_not(roiIncludeMask, roiExcludeMask);
-        gotMasks = true;
-      }
-
       if(!gotWarp_)
       {
       	cv::imshow(irInImageShowName_, irImage);
@@ -214,87 +205,10 @@ int CameraFuse::fusionloop()
         continue;
       }
 
-      thermalAlpha = iThermalAlpha / 100.0;
-      colorAlpha = iColorAlpha / 100.0;
+      fo.fuse(irImage, rgbImage, fusedImage_, 
+        warpMatrix_, iThermalAlpha_, iColorAlpha_);
 
-      //ROS_INFO("mainLoop a");
-      // invert pixel intensity so that colorizer works in correct direction
-      cv::bitwise_not(irImage, irImage);
-
-      //ROS_INFO("mainLoop b");
-      // colorize 
-      cv::applyColorMap(irImage, imColorized, cv::ColormapTypes::COLORMAP_RAINBOW);
-
-      //ROS_INFO("mainLoop c");
-      // show the image
-      if (showDebugImages_)
-        cv::imshow("imColorized", imColorized);
-
-      //ROS_INFO("mainLoop d");
-      // merge the color and gray thermal images
-      cv::addWeighted(irImage, 1 - colorAlpha, imColorized, colorAlpha, 0.0, irImage);
-
-      //ROS_INFO("mainLoop e");
-      // warp the thermal image to the perspective of the visible image
-      cv::warpPerspective(irImage, imWarped, warpMatrix, rgbImage.size());
-
-      ///ROS_INFO("mainLoop f");
-      // show the image
-      if (showDebugImages_)
-        cv::imshow("imWarped", imWarped);
-
-      ///ROS_INFO("mainLoop g");
-      // mask out the visible image outside of thermal viewport
-      rgbImage.copyTo(roiIncludeVisibleImage, roiIncludeMask);
-
-      {
-        //lock out_image_, dont modify out_image_ before here
-        boost::shared_lock<boost::shared_mutex> lock(mutexFusedImage_);
-
-        //ROS_INFO("mainLoop h");
-        // merge the visible and thermal images in the thermal viewport
-        cv::addWeighted(imWarped, 1 - thermalAlpha, roiIncludeVisibleImage, thermalAlpha, 0.0, fusedImage_);
-
-        ///ROS_INFO("mainLoop i");
-        // show the image
-        if (showDebugImages_)
-          cv::imshow("imFusedSmall", fusedImage_);
-
-        //ROS_INFO("mainLoop j");
-        // mask out the visible area inside the thermal viewport
-        rgbImage.copyTo(roiExcludeVisibleImage, roiExcludeMask);
-
-        //ROS_INFO("mainLoop k");
-        // merge the visible and thermal images in the visible viewport
-        cv::addWeighted(fusedImage_, 1, roiExcludeVisibleImage, 1, 0.0, fusedImage_);
-
-        fusedImageReady_.post();
-
-        ///ROS_INFO("mainLoop l");
-        if (showDebugImages_)
-          FuseOps::DrawROI(fusedImage_, warpedBBox);
-      }
-
-      // This area is for the visible = camera0 thermal = camera1 scenario
-
-      /*bitwise_not(frame2, frame2);
-      warpPerspective(frame1, imWarped, warpMatrix, frame2.size());
-
-      applyColorMap(frame2, imColorized, COLORMAP_RAINBOW);
-      addWeighted(frame2, 1 - colorAlpha, imColorized, colorAlpha, 0.0, frame2);
-
-      addWeighted(imWarped, 1 - thermalAlpha, frame2, thermalAlpha, 0.0, imFused);*/
-
-      // show the image
-      //if(showFusedImage_)
-      //  cv::imshow("fused", fusedImage_);
-
-      if(showDebugImages_)
-        cv::waitKey(3);
-
-      //ROS_INFO("mainLoop show");
-      //imshow("zebra", imFused);
-      //ROS_INFO("mainLoop showed");
+      fusedImageReady_.post();
     }
     catch(const std::exception& e)
     {
@@ -327,8 +241,8 @@ int CameraFuse::displayloop()
   if(showFusedImage_)
   {
     cv::namedWindow(fusedImageDisplayName_, cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
-    cv::createTrackbar("Thermal / Vis", fusedImageDisplayName_, &iThermalAlpha, 100);
-	  cv::createTrackbar("Thermal Color", fusedImageDisplayName_, &iColorAlpha, 100);
+    cv::createTrackbar("Thermal / Vis", fusedImageDisplayName_, &iThermalAlpha_, 100);
+	  cv::createTrackbar("Thermal Color", fusedImageDisplayName_, &iColorAlpha_, 100);
     
     // interesting potential
     // https://docs.opencv.org/2.4/modules/highgui/doc/qt_new_functions.html

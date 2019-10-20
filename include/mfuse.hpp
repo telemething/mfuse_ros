@@ -60,8 +60,8 @@ private:
   std::string cloudProjectionDisplayName_ = "Cloud Projection";
 
   int warpType_ = cv::MOTION_HOMOGRAPHY;
-  int iThermalAlpha = 50;
-  int iColorAlpha = 50;
+  int iThermalAlpha_ = 50;
+  int iColorAlpha_ = 50;
   int logloopTimeoutMilliseconds_ = 250;
   bool showCameraInStreams_ = false;
   bool showCloudInStreams_ = false;
@@ -96,8 +96,8 @@ private:
   std_msgs::Header rgbImageHeader_;
   std_msgs::Header irImageHeader_;
 
-  cv::Mat warpMatrix, roiIncludeMask, roiExcludeMask, fusedImage_;
-  std::vector<cv::Point2f> warpedBBox;
+  cv::Mat warpMatrix_, fusedImage_;
+ 
 
   std::shared_ptr<pcl::visualization::PCLVisualizer> cloudViewer_;
   int cloudViewPort_ = 0;

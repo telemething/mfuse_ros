@@ -11,7 +11,7 @@
 namespace mfuse
 {
 
-    //*****************************************************************************
+//*****************************************************************************
 //*
 //*
 //*
@@ -111,4 +111,90 @@ cv::Mat FuseOps::getMask(const cv::Mat original, const std::vector<cv::Point2f> 
 
 	return roiMask;
 }
+
+//*****************************************************************************
+//*
+//*
+//*
+//******************************************************************************
+
+int FuseOps::fuse(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage, 
+    const cv::Mat& warpMatrix, const int iThermalAlpha, const int iColorAlpha)
+{ 
+    try
+    {
+      if(!gotMasks)
+      {
+        warpedBBox = FuseOps::getTransposedBBox(irImage, warpMatrix);
+        roiIncludeMask = FuseOps::getMask(rgbImage, warpedBBox, true);
+        cv::bitwise_not(roiIncludeMask, roiExcludeMask);
+        gotMasks = true;
+      }
+
+      thermalAlpha = iThermalAlpha / 100.0;
+      colorAlpha = iColorAlpha / 100.0;
+
+      // invert pixel intensity so that colorizer works in correct direction
+      cv::bitwise_not(irImage, irImage);
+
+      // colorize 
+      cv::applyColorMap(irImage, imColorized, cv::ColormapTypes::COLORMAP_RAINBOW);
+
+      // show the image
+      if (showDebugImages_)
+        cv::imshow("imColorized", imColorized);
+
+      // merge the color and gray thermal images
+      cv::addWeighted(irImage, 1 - colorAlpha, imColorized, colorAlpha, 0.0, irImage);
+
+      // warp the thermal image to the perspective of the visible image
+      cv::warpPerspective(irImage, imWarped, warpMatrix, rgbImage.size());
+
+      // show the image
+      if (showDebugImages_)
+        cv::imshow("imWarped", imWarped);
+
+      // mask out the visible image outside of thermal viewport
+      rgbImage.copyTo(roiIncludeVisibleImage, roiIncludeMask);
+
+      {
+        //lock out_image_, dont modify out_image_ before here
+        //---- boost::shared_lock<boost::shared_mutex> lock(mutexFusedImage_);
+
+        // merge the visible and thermal images in the thermal viewport
+        cv::addWeighted(imWarped, 1 - thermalAlpha, roiIncludeVisibleImage, thermalAlpha, 0.0, fusedImage);
+
+        // show the image
+        if (showDebugImages_)
+          cv::imshow("imFusedSmall", fusedImage);
+
+        // mask out the visible area inside the thermal viewport
+        rgbImage.copyTo(roiExcludeVisibleImage, roiExcludeMask);
+
+        // merge the visible and thermal images in the visible viewport
+        cv::addWeighted(fusedImage, 1, roiExcludeVisibleImage, 1, 0.0, fusedImage);
+
+        //----fusedImageReady_.post();
+
+        if (showDebugImages_)
+          FuseOps::DrawROI(fusedImage, warpedBBox);
+      }
+
+      if(showDebugImages_)
+        cv::waitKey(3);
+    }
+    catch(const std::exception& e)
+    {
+      //ROS_ERROR("--- EXCEPTION --- CameraFuse::fusionloop: %s", e.what());
+      //logger_->error("- EXCEPTION --- CameraFuse::fusionloop: {}", e.what());
+    }
+    catch(...)
+    {
+      //ROS_ERROR("--- EXCEPTION --- CameraFuse::fusionloop: -undefined-");
+      //logger_->error("--- EXCEPTION --- CameraFuse::fusionloop: -undefined-");
+    }
+
+  return 0; 
+}
+
 } // namespace mfuse
