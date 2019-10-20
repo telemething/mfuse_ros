@@ -34,8 +34,8 @@ CameraFuse::CameraFuse(ros::NodeHandle nh) :
 
 	showCameraInStreams_ = false;
   showDebugImages_ = false;
-  showFusedImage_ = false;
-  showCloudInStreams_ = true;
+  showFusedImage_ = true;
+  showCloudInStreams_ = false;
   collectCloudDataStats_ = false;
 
 	ROS_INFO("[CameraFuse] Node startedy.");
@@ -80,24 +80,6 @@ bool CameraFuse::readParameters()
   //nodeHandle_.param("image_view/enable_console_output", enableConsoleOutput_, false);
 
   return true;
-}
-
-//*****************************************************************************
-//
-//
-//
-//*****************************************************************************
-
-int CameraFuse::readWarpFile(const std::string filename, cv::Mat& warp)
-{
-	cv::FileStorage fs2(filename, cv::FileStorage::READ);
-	fs2["warpMatrix"] >> warp;
-	fs2.release();
-
-	if (nullptr == warp.data)
-		return 0;
-
-	return 1;
 }
 
 //*****************************************************************************
@@ -163,7 +145,8 @@ int CameraFuse::init()
   fusionThread_ = std::thread(&CameraFuse::fusionloop, this); 
   displayThread_ = std::thread(&CameraFuse::displayloop, this); 
 
-  cloudViewerTimer_ = nodeHandle_.createTimer(ros::Duration(0.1), &CameraFuse::cloudViewerTimerCallback, this);
+  if(showCloudInStreams_)
+    cloudViewerTimer_ = nodeHandle_.createTimer(ros::Duration(0.1), &CameraFuse::cloudViewerTimerCallback, this);
 
   // initialize or load the warp matrix
 	if (warpType_ == cv::MOTION_HOMOGRAPHY)
@@ -171,70 +154,10 @@ int CameraFuse::init()
 	else
 		warpMatrix = cv::Mat::eye(2, 3, CV_32F);
 
-	gotWarp_ = readWarpFile(warpFileName, warpMatrix);
+	gotWarp_ = FuseOps::readWarpFile(warpFileName, warpMatrix);
 
 
 }
-
-//*****************************************************************************
-//
-//
-//
-//*****************************************************************************
-
-int CameraFuse::DrawROI(cv::Mat image, std::vector<cv::Point2f> outline)
-{
-	cv::line(image, outline[0], outline[1], cv::Scalar(110, 220, 0), 1, 8);
-	cv::line(image, outline[1], outline[2], cv::Scalar(110, 220, 0), 1, 8);
-	cv::line(image, outline[2], outline[3], cv::Scalar(110, 220, 0), 1, 8);
-	cv::line(image, outline[3], outline[0], cv::Scalar(110, 220, 0), 1, 8);
-
-	return 0;
-}
-
-	//*****************************************************************************
-	//
-	//
-	//
-	//*****************************************************************************
-
-	std::vector<cv::Point2f> CameraFuse::getTransposedBBox(const cv::Mat original, const cv::Mat warpMatrix)
-	{
-		std::vector<cv::Point2f> vIn;
-		std::vector<cv::Point2f> vOut;
-
-		vIn.push_back(cv::Point2f(0, 0));
-		vIn.push_back(cv::Point2f(0, static_cast<float>(original.rows)));
-		vIn.push_back(cv::Point2f(static_cast<float>(original.cols), static_cast<float>(original.rows)));
-		vIn.push_back(cv::Point2f(static_cast<float>(original.cols), 0));
-
-		cv::perspectiveTransform(vIn, vOut, warpMatrix);
-
-		return vOut;
-	}
-
-	//*****************************************************************************
-	//
-	//
-	//
-	//*****************************************************************************
-
-	cv::Mat CameraFuse::getMask(const cv::Mat original, const std::vector<cv::Point2f> area, const bool include) 
-	{
-		std::vector<cv::Point> hull;
-
-		for (std::vector<int>::size_type i = 0; i != area.size(); i++) {
-			hull.push_back(cv::Point2i(static_cast<int>(area[i].x), static_cast<int>(area[i].y)));
-		}
-
-		// draw black (or white) image 
-		cv::Mat roiMask(original.rows, original.cols, CV_8U, include ? cv::Scalar(0) : cv::Scalar(255));
-
-		// fill mask area with white (or black)
-		fillConvexPoly(roiMask, hull, include ? cv::Scalar(255) : cv::Scalar(0));
-
-		return roiMask;
-	}
 
 //*****************************************************************************
 //*
@@ -277,8 +200,8 @@ int CameraFuse::fusionloop()
 
       if(!gotMasks)
       {
-        warpedBBox = getTransposedBBox(irImage, warpMatrix);
-        roiIncludeMask = getMask(rgbImage, warpedBBox, true);
+        warpedBBox = FuseOps::getTransposedBBox(irImage, warpMatrix);
+        roiIncludeMask = FuseOps::getMask(rgbImage, warpedBBox, true);
         bitwise_not(roiIncludeMask, roiExcludeMask);
         gotMasks = true;
       }
@@ -349,7 +272,7 @@ int CameraFuse::fusionloop()
 
         ///ROS_INFO("mainLoop l");
         if (showDebugImages_)
-          DrawROI(fusedImage_, warpedBBox);
+          FuseOps::DrawROI(fusedImage_, warpedBBox);
       }
 
       // This area is for the visible = camera0 thermal = camera1 scenario

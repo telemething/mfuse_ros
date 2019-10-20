@@ -42,18 +42,17 @@
 #pragma GCC diagnostic pop
 
 #include <mfuse_cloud_ops.hpp>
-#include <mfuse_fuse_ops.hpp>
 #include <mfuse_logger.hpp>
 
 // http://wiki.ros.org/pcl_conversions
 
 namespace mfuse
 {
-class CameraFuse 
+class FuseOps 
 {
 private:
 
-  std::string rgbInImageShowName_ = "RGB In";
+  /*std::string rgbInImageShowName_ = "RGB In";
   std::string irInImageShowName_ = "IR In";
   std::string warpFileName = "thewarp.json";
   std::string fusedImageDisplayName_ = "Fused Image";
@@ -113,18 +112,23 @@ private:
   void irCameraCallback(const sensor_msgs::ImageConstPtr& msg);
   void pcInCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
   void cloudViewerTimerCallback(const ros::TimerEvent&);
+*/
 
-  void toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud, 
-    cv::Mat& outImage, int width, int height, int scale);
 
 public:
 
-  explicit CameraFuse(ros::NodeHandle nh);
-  ~CameraFuse();
+  explicit FuseOps();
+  ~FuseOps();
 
-  int init();
+  static int readWarpFile(const std::string filename, cv::Mat& warp);
+  static int DrawROI(cv::Mat image, std::vector<cv::Point2f> outline);
+  static std::vector<cv::Point2f> getTransposedBBox(const cv::Mat original, const cv::Mat warpMatrix);
+  static cv::Mat getMask(const cv::Mat original, const std::vector<cv::Point2f> area, const bool include) ;
 
-}; // class cameraFuse   
+  //void toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud, 
+  //  cv::Mat& outImage, int width, int height, int scale);
+
+}; // class FuseOps   
 } // namespace mfuse
 
 

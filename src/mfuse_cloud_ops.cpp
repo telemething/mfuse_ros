@@ -126,7 +126,7 @@ void CloudOps::toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud,
 
 //*****************************************************************************
 //*
-//* Convert a LIVOX unorganized point cloud to a cv::Mat image. This duffers from
+//* Convert a LIVOX unorganized point cloud to a cv::Mat image. This differs from
 //* toCvImage in that it creates a grayscale image and colorizes that instead
 //* of colorizing the points from the cloud directly
 //*
