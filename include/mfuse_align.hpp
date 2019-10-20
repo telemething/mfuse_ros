@@ -47,8 +47,12 @@ public:
   struct matchPointType2 { cv::Point2i cloud; cv::Point2i visible; cv::Point2i ir; };
   explicit CameraAlign(ros::NodeHandle nh);
   ~CameraAlign();
+  void DoFuse();
 
 private:
+
+  enum doOpEnum {DoOpNothing, DoOpFuse, DoOpAccept, DoOpQuit};
+  doOpEnum doOp_;
 
   int logloopTimeoutMilliseconds_ = 250;
   std::string rgbInImageShowName_ = "RGB In";
@@ -123,6 +127,7 @@ private:
 		const cv::Mat& im3, cv::Mat& imCombined);
   void drawMatchPoints(const cv::Mat& img, std::vector<CameraAlign::matchPointType2>& points);
 	cv::Mat calculateHomography(std::vector<matchPointType> matchPoints);
+  cv::Mat calculateHomography(std::vector<matchPointType2> matchPoints);
 	void rectifyManually(cv::Mat& im1, cv::Mat& im2, cv::Mat& im3);
   int displayloop();
 

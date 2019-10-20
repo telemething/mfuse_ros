@@ -40,7 +40,7 @@ CameraAlign::CameraAlign(ros::NodeHandle nh) :
 {
 	std::string logDirectory = "/Data/Shared/Logs/";
 	showCameraInStreams_ = false;
-	showCloudInStreams_ = true;
+	showCloudInStreams_ = false;
 
 	ROS_INFO("[CameraAlign] Node started.");
 
@@ -145,9 +145,9 @@ int CameraAlign::init()
     //fusionThread_ = std::thread(&CameraFuse::fusionloop, this); 
     displayThread_ = std::thread(&CameraAlign::displayloop, this); 
 
-	cloudViewerTimer_ = nodeHandle_.createTimer(ros::Duration(0.1), 
-												&CameraAlign::cloudViewerTimerCallback, this);
-
+	if(showCloudInStreams_)
+		cloudViewerTimer_ = nodeHandle_.createTimer(ros::Duration(0.1), 
+													&CameraAlign::cloudViewerTimerCallback, this);
 
     // initialize or load the warp matrix
 	/*if (warpType_ == cv::MOTION_HOMOGRAPHY)
@@ -341,7 +341,8 @@ int CameraAlign::init()
 
 	static void fuseButtonCallback(int state, void* userdata)
 	{
-
+		auto ca = static_cast<CameraAlign*>(userdata);
+		ca->DoFuse();
 	}
 
 	//*****************************************************************************
@@ -383,6 +384,17 @@ int CameraAlign::init()
 	//
 	//*****************************************************************************
 
+	void CameraAlign::DoFuse()
+	{
+		doOp_ = doOpEnum::DoOpFuse;
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
 	void CameraAlign::getSideBySideImage(const cv::Mat& im1, const cv::Mat& im2, 
 		cv::Mat& imCombined, const std::string windowName)
 	{
@@ -407,11 +419,11 @@ int CameraAlign::init()
 			cv::createTrackbar("Thermal", windowName.c_str(), &iThermalAlpha, 100);
 	  		cv::createTrackbar("Color", windowName.c_str(), &iColorAlpha, 100);
 
-			cv::createButton("Undo Last", undoLastButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
-			cv::createButton("Clear", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
-			cv::createButton("Fuse", fuseButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
-			cv::createButton("Accept", acceptButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
-			cv::createButton("Quit", quitButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+			cv::createButton("Undo Last", undoLastButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
+			cv::createButton("Clear", clearButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
+			cv::createButton("Fuse", fuseButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
+			cv::createButton("Accept", acceptButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
+			cv::createButton("Quit", quitButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
 
 			cv::setMouseCallback(windowName.c_str(), manualRectifyMouseCallback, this);
 			cv::displayStatusBar(windowName.c_str(), "--- select a thing ---", 0);
@@ -445,11 +457,11 @@ int CameraAlign::init()
 				cv::createTrackbar("Thermal", windowName.c_str(), &iThermalAlpha, 100);
 				cv::createTrackbar("Color", windowName.c_str(), &iColorAlpha, 100);
 
-				cv::createButton("Undo Last", undoLastButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
-				cv::createButton("Clear", clearButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
-				cv::createButton("Fuse", fuseButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
-				cv::createButton("Accept", acceptButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
-				cv::createButton("Quit", quitButtonCallback, NULL, cv::QT_PUSH_BUTTON, 0 );
+				cv::createButton("Undo Last", undoLastButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
+				cv::createButton("Clear", clearButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
+				cv::createButton("Fuse", fuseButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
+				cv::createButton("Accept", acceptButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
+				cv::createButton("Quit", quitButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
 
 				cv::setMouseCallback(windowName.c_str(), manualRectifyMouseCallback, this);	
 				cv::displayStatusBar(windowName.c_str(), "--- select first point ---", 0);
@@ -549,6 +561,36 @@ int CameraAlign::init()
 			matchPoints.pop_back();
 		}
 
+		return cv::findHomography(begin, end);
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	cv::Mat CameraAlign::calculateHomography(std::vector<matchPointType2> matchPoints)
+	{
+		std::vector<cv::Point2f> begin, end;
+
+		while (!matchPoints.empty())
+		{
+			auto shiftedPoint = matchPoints.back();
+
+			// adjust for visible image right shift
+			shiftedPoint.visible.x -=  visibleRoiRect.x;
+
+			// adjust for cloud image down shift
+			shiftedPoint.cloud.y -= cloudRoiRect.y;
+
+			// should result in same as original
+			begin.push_back(shiftedPoint.ir);
+			end.push_back(shiftedPoint.visible);
+
+			matchPoints.pop_back();
+		}
+
 		return findHomography(begin, end);
 	}
 
@@ -560,15 +602,15 @@ int CameraAlign::init()
 
 	bool staticRectifyImages_ = false;
 
-	void CameraAlign::rectifyManually(cv::Mat& im1, cv::Mat& im2, cv::Mat& im3)
+	void CameraAlign::rectifyManually(cv::Mat& irImgIn, cv::Mat& visImgIn, cv::Mat& cloudImgIn)
 	{
 		cv::Mat imCombined, homography, imFitted, imBlended, ROI;
 
 		double alpha = 0.5; double beta = 1 - alpha;
 
-		//getSideBySideImage(im1, im2, imCombined, rectifyWindowsName);
+		//getSideBySideImage(irImgIn, visImgIn, imCombined, rectifyWindowsName);
 
-		showAlignWindow(im1, im2, im3, imCombined, rectifyWindowsName);
+		showAlignWindow(irImgIn, visImgIn, cloudImgIn, imCombined, rectifyWindowsName);
 
 		combinedImage = imCombined.clone();
 
@@ -576,7 +618,6 @@ int CameraAlign::init()
 
 		while (true)
 		{
-			// leave it for another time
 			if(!staticRectifyImages_)
 			{
 				/*
@@ -585,53 +626,74 @@ int CameraAlign::init()
 					boost::shared_lock<boost::shared_mutex> lockRgb(mutexRgbCameraImage_);
 					boost::shared_lock<boost::shared_mutex> lockIr(mutexIrCameraImage_);
 
-					//irImage_->image.copyTo(im1);
-					//rgbImage_->image.copyTo(im2);
+					//irImage_->image.copyTo(irImgIn);
+					//rgbImage_->image.copyTo(visImgIn);
 				//}
 				*/
 
 				showAlignWindow(irImage_->image, rgbImage_->image, 
 					cloudProjectionImage_, imCombined, rectifyWindowsName);
+
 			}
 
 			int keyPressed = cv::waitKey(30);
 
-			if (keyPressed == -1)
-				continue;
-
-			std::cout << "Key '" << keyPressed << "' pressed" << std::endl;
-
-			switch (keyPressed)
+			if (keyPressed != -1)
 			{
-			case 'c':
-				matchPoints.clear();
-				combinedImage = imCombined.clone();
-				imshow(rectifyWindowsName, combinedImage);
-				break;
-			case 'f':
-				// get homogarphy
-				homography = calculateHomography(matchPoints);
+				//std::cout << "Key '" << keyPressed << "' pressed" << std::endl;
 
-				saveWarp(warpFileName, homography);
+				switch (keyPressed)
+				{
+					case 'c':
+						clearButtonCallback(0,0);
+						break;
+					case 'u':
+						undoLastButtonCallback(0,0);
+						break;
+					case 'f':
+						doOp_ = doOpEnum::DoOpFuse;
+						break;
+					case 'a':
+						doOp_ = doOpEnum::DoOpAccept;
+						break;
+					case 'q':
+						doOp_ = doOpEnum::DoOpQuit;
+						break;
+					default:
+						break;
+				}
+			}
 
-				// Warp source image to destination based on homography
-				warpPerspective(im1, imFitted, homography, im2.size());
+			switch (doOp_)
+			{
+				case doOpEnum::DoOpFuse:
 
-				cv::imshow("imFitted", imFitted);
+					doOp_ = doOpEnum::DoOpNothing;
 
-				//ROI = im1(Rect(0, 1, imFitted.cols, imFitted.rows));
+					// get homogarphy
+					homography = calculateHomography(matchPoints2);
 
-				//addWeighted(ROI, alpha, imFitted, beta, 0.0, imBlended);
+					//saveWarp(warpFileName, homography);
 
-				//imshow("blended", imBlended);
+					// Warp source image to destination based on homography
+					//cv::warpPerspective(irImgIn, imFitted, homography, visImgIn.size());
+					cv::warpPerspective(irImage_->image, imFitted, homography, rgbImage_->image.size());
 
-				break;
-			case 'a':
-				return;
-			case 'q':
-				return;
-			default:
-				break;
+					cv::imshow("imFitted", imFitted);
+
+					//ROI = im1(Rect(0, 1, imFitted.cols, imFitted.rows));
+
+					//addWeighted(ROI, alpha, imFitted, beta, 0.0, imBlended);
+
+					//imshow("blended", imBlended);
+
+					break;
+				case doOpEnum::DoOpAccept:
+					return;
+				case doOpEnum::DoOpQuit:
+					return;
+				default:
+					break;
 			}
 		}
 	}
