@@ -85,6 +85,8 @@ private:
   int iThermalAlpha = 50;
   int iColorAlpha = 50;
 
+  int projectionImageWidth_ = 1000, projectionImageHeight_ = 1000, projectionImageScale_ = 10;
+
   // ROS subscribers 
   image_transport::Subscriber rgbSubscriber_;
   image_transport::Subscriber irSubscriber_;
@@ -92,6 +94,7 @@ private:
 
   boost::shared_mutex mutexRgbCameraImage_;
   boost::shared_mutex mutexIrCameraImage_;
+  boost::shared_mutex mutexCloudProjectionImage_;  
   boost::shared_mutex mutexFusedImage_;
 
   cv_bridge::CvImagePtr rgbImage_;

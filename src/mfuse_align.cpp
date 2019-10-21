@@ -149,6 +149,15 @@ int CameraAlign::init()
 		cloudViewerTimer_ = nodeHandle_.createTimer(ros::Duration(0.1), 
 													&CameraAlign::cloudViewerTimerCallback, this);
 
+	projectionImageWidth_ = 500;
+	projectionImageHeight_ = 500;
+	projectionImageScale_ = 10;
+
+	cloudOps_.SetQueueSize(200);
+	cloudOps_.RunCurrentCloudCreationThread(projectionImageWidth_, 
+		projectionImageHeight_, projectionImageScale_, 100 );
+	cloudOps_.SetDepthRange(0,50);
+
     // initialize or load the warp matrix
 	/*if (warpType_ == cv::MOTION_HOMOGRAPHY)
 		warpMatrix = cv::Mat::eye(3, 3, CV_32F);
@@ -619,7 +628,7 @@ int CameraAlign::init()
 
 	void CameraAlign::rectifyManually(cv::Mat& irImgIn, cv::Mat& visImgIn, cv::Mat& cloudImgIn)
 	{	
-		cv::Mat imCombined, homography, imFitted, imBlended, ROI;
+		cv::Mat imCombined, homography, imFitted, imBlended, ROI, irImg, visImg, cloudProjectionImage;
 
 		// temp
 		cv::Mat imFused;
@@ -641,20 +650,24 @@ int CameraAlign::init()
 		{
 			if(!staticRectifyImages_)
 			{
-				/*
-				//{
 				// lock the images
+				{
 					boost::shared_lock<boost::shared_mutex> lockRgb(mutexRgbCameraImage_);
+					irImage_->image.copyTo(irImg);
+				}
+				{
 					boost::shared_lock<boost::shared_mutex> lockIr(mutexIrCameraImage_);
-
-					//irImage_->image.copyTo(irImgIn);
-					//rgbImage_->image.copyTo(visImgIn);
-				//}
-				*/
-
-				showAlignWindow(irImage_->image, rgbImage_->image, 
-					cloudProjectionImage_, imCombined, rectifyWindowsName);
-
+					rgbImage_->image.copyTo(visImg);
+				}
+				{
+					boost::shared_lock<boost::shared_mutex> lockCloudProjection(mutexCloudProjectionImage_);
+					cloudProjectionImage_.copyTo(cloudProjectionImage);
+				}
+				
+				//showAlignWindow(irImage_->image, rgbImage_->image, 
+				//	cloudProjectionImage_, imCombined, rectifyWindowsName);
+				
+				showAlignWindow(irImg, visImg, cloudProjectionImage, imCombined, rectifyWindowsName);
 			}
 
 			int keyPressed = cv::waitKey(30);
@@ -847,9 +860,15 @@ void CameraAlign::pcInCallback(const sensor_msgs::PointCloud2ConstPtr& msg)
     //cloudProjectionImage_ = cloudProjectionImage.clone();
 
 	cloudOps_.add(*msg);
-	cloudOut = cloudOps_.getCurrentCloud();
-	cloudProjectionImage_ = cloudOps_.getCurrentProjectionImage(width, height, scale);
-	gotcloudProjectionImage_ = true;
+	//cloudOut = cloudOps_.getCurrentCloud();
+	
+
+	{
+		boost::unique_lock<boost::shared_mutex> lockCloudProjection(mutexCloudProjectionImage_);
+		//cloudProjectionImage_ = cloudOps_.getCurrentProjectionImage(width, height, scale);
+		cloudProjectionImage_ = cloudOps_.getCurrentProjectionImage();
+		gotcloudProjectionImage_ = true;
+	}
 
     if(showCloudInStreams_)
     {

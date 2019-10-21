@@ -43,6 +43,46 @@ void CloudOps::Colorize(bool active)
     colorize_ = false;
 }
 
+//*****************************************************************************
+//*
+//*
+//*
+//******************************************************************************
+
+void CloudOps::SetQueueSize(int queueuSize)
+{
+  cloudQueueSizeMax_ = queueuSize;
+}
+
+//*****************************************************************************
+//*
+//*
+//*
+//******************************************************************************
+
+void CloudOps::SetDepthRange(int minDepth, int maxDepth)
+{
+  minDepth_ = minDepth;
+  maxDepth_ = maxDepth;
+}
+
+//*****************************************************************************
+//*
+//*
+//*
+//******************************************************************************
+
+void CloudOps::RunCurrentCloudCreationThread(int width, int height, 
+  int scale, int sleepTime)
+{
+  currentCloudloopSleepTimeMs_ = sleepTime;
+  projectionImageWidth_ = width;
+  projectionImageScale_ = scale;
+  projectionImageHeight_ = height;
+
+  currentCloudloopThread_ = std::thread(&CloudOps::currentCloudloop, this); 
+}
+
 /*inline
 void toROSMsg(const sensor_msgs::PointCloud2 &cloud, sensor_msgs::Image &image)
 {
@@ -92,6 +132,9 @@ void CloudOps::toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud,
     {
       for (size_t x = 0; x < cloud.width; x++)
       {
+        if( minDepth_ > cloud[x].x || maxDepth_ < cloud[x].x )
+          continue;
+
         if(collectCloudDataStats_)
         {
           maxX = std::max(maxX,cloud[x].x);
@@ -218,7 +261,7 @@ void CloudOps::add(const sensor_msgs::PointCloud2 &cloud)
     // convert ROS cloud to pcl cloud
     pcl::fromROSMsg(cloud, cloudOut);
 
-    if(cloudQueueSizeCurrent_ == cloudQueueSizeMax_)
+    while(cloudQueueSizeCurrent_ > cloudQueueSizeMax_)
     {
       cloudPopped = cloudQueue_.front();
       cloudQueue_.pop_front();
@@ -254,14 +297,41 @@ pcl::PointCloud<pcl::PointXYZI> CloudOps::getCurrentCloud()
   {
     currentCloud_.clear();
 
+    int counted = 0;
+
     for(auto index = cloudQueue_.begin(); index != cloudQueue_.end(); index++)
     {
       currentCloud_ += *index;
+      if(counted++ > cloudQueueSizeMax_)
+        break;
     }
 
     // return the current cloud
     return currentCloud_;
   }
+
+//*****************************************************************************
+//*
+//*
+//*
+//******************************************************************************
+
+int CloudOps::currentCloudloop()
+{
+  while(true)
+  {
+    getCurrentCloud();
+    {
+      boost::unique_lock<boost::shared_mutex> lockCloudProjection(projectionImageMutex_);
+      toCvImage(currentCloud_, currentProjectionImage_, projectionImageWidth_, 
+        projectionImageHeight_, projectionImageScale_);
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(currentCloudloopSleepTimeMs_));
+  }
+
+  return 0;
+}
 
 //*****************************************************************************
 //*
@@ -278,21 +348,41 @@ cv::Mat CloudOps::getCurrentProjectionImage(int width, int height, int scale)
     return currentProjectionImage_;
   }
 
+//*****************************************************************************
+//*
+//*  
+//*
+//******************************************************************************
 
-  /**
-   * @brief Conversion from a sensor_msgs::PointCLoud2 to octomap::Pointcloud, used internally in OctoMap
-   *
-   * @param cloud
-   * @param octomapCloud
-   */
-  void pointCloud2ToOctomap(const sensor_msgs::PointCloud2& cloud, octomap::Pointcloud& octomapCloud){
+cv::Mat CloudOps::getCurrentProjectionImage()
+  {
+    boost::shared_lock<boost::shared_mutex> lockCloudProjection(projectionImageMutex_);
+
+    // return the current projection image
+    return currentProjectionImage_;
+  }
+
+//*****************************************************************************
+//
+// @brief Conversion from a sensor_msgs::PointCLoud2 to octomap::Pointcloud, 
+// used internally in OctoMap
+// 
+// @param cloud
+// @param octomapCloud
+//
+//*****************************************************************************
+
+  void pointCloud2ToOctomap(const sensor_msgs::PointCloud2& cloud, 
+  octomap::Pointcloud& octomapCloud)
+  {
     octomapCloud.reserve(cloud.data.size() / cloud.point_step);
 
     sensor_msgs::PointCloud2ConstIterator<float> iter_x(cloud, "x");
     sensor_msgs::PointCloud2ConstIterator<float> iter_y(cloud, "y");
     sensor_msgs::PointCloud2ConstIterator<float> iter_z(cloud, "z");
 
-    for (; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z){
+    for (; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z)
+    {
       // Check if the point is invalid
       if (!std::isnan (*iter_x) && !std::isnan (*iter_y) && !std::isnan (*iter_z))
         octomapCloud.push_back(*iter_x, *iter_y, *iter_z);

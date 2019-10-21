@@ -29,6 +29,10 @@
 //#include <octomap_ros/conversions.h>
 #include <colmap.hpp>
 
+#include <iostream>
+#include <chrono>
+#include <thread>
+
 namespace mfuse
 {
 class CloudOps 
@@ -46,8 +50,10 @@ public:
 
   pcl::PointCloud<pcl::PointXYZI> getCurrentCloud();
   cv::Mat getCurrentProjectionImage(int width, int height, int scale);
+  cv::Mat getCurrentProjectionImage();
 
   void Colorize(bool active);
+  void SetQueueSize(int queueuSize);
 
   void fromROSMsg(const sensor_msgs::PointCloud2& cloud, 
     pcl::PointCloud<pcl::PointXYZI>& cloudOut,
@@ -56,20 +62,31 @@ public:
     cv::Mat& outImage, int width, int height, int scale);
   void toCvImage2(const pcl::PointCloud<pcl::PointXYZI>& cloud, 
     cv::Mat& outImage, int width, int height, int scale);
+  void RunCurrentCloudCreationThread(int width, int height, int scale, int sleepTime);
+  void SetDepthRange(int minDepth, int maxDepth);
 
 private:
 
+  boost::shared_mutex projectionImageMutex_;
   std::deque<pcl::PointCloud<pcl::PointXYZI>> cloudQueue_;
   pcl::PointCloud<pcl::PointXYZI> currentCloud_;
   colmap::ColMap* colmap_;
   int cloudQueueSizeMax_ = 10;
   int cloudQueueSizeCurrent_ = 0;
+  int currentCloudloopSleepTimeMs_ = 100;
+
+  int projectionImageWidth_, projectionImageHeight_, projectionImageScale_;
+  int minDepth_ = 0, maxDepth_ = 1000;
 
   bool collectCloudDataStats_ = false;
   bool autoScaleColorMap_ = true;
   bool colorize_ = false;
   cv::Mat currentProjectionImage_;
+  std::thread currentCloudloopThread_; 
 
   float maxX = 0, maxY = 0, maxZ = 0, minX = 255, minY = 255, minZ = 255;
+
+  int currentCloudloop();
+
 }; // class CameraAlign   
 } // namespace mfuse
