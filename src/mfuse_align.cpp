@@ -481,21 +481,36 @@ int CameraAlign::init()
 	//
 	//*****************************************************************************
 
-	void CameraAlign::combineImages(const cv::Mat& im1, const cv::Mat& im2, 
+	void CameraAlign::combineImages(const cv::Mat& irImg, const cv::Mat& visImg, 
 		cv::Mat& imCombined)
 	{
-		cv::Mat combined( std::max(im1.size().height, im2.size().height),
-			im1.size().width + im2.size().width, CV_8UC3);
+		cv::Mat combined( std::max(irImg.size().height, visImg.size().height),
+			irImg.size().width + visImg.size().width, CV_8UC3);
 		combined = 0;
 
-		matchPointEndWidthOffset = im1.size().width;
+		matchPointEndWidthOffset = irImg.size().width;
 
 		//printf("combined frame c r : %i %i\r\n", combined.cols, combined.rows);
 
-		cv::Mat left_roi(combined, cv::Rect(0, 0, im1.size().width, im1.size().height));
-		im1.copyTo(left_roi);
-		cv::Mat right_roi(combined, cv::Rect(im1.size().width, 0, im2.size().width, im2.size().height));
-		im2.copyTo(right_roi);
+		cv::Mat left_roi(combined, cv::Rect(0, 0, irImg.size().width, irImg.size().height));
+		irImg.copyTo(left_roi);
+		cv::Mat right_roi(combined, cv::Rect(irImg.size().width, 0, visImg.size().width, visImg.size().height));
+		visImg.copyTo(right_roi);
+
+		irRoiRect.x = 0;
+		irRoiRect.y = 0;
+		irRoiRect.height = irImg.size().height;
+		irRoiRect.width = irImg.size().width;
+
+		visibleRoiRect.x = irRoiRect.width;
+		visibleRoiRect.y = 0;
+		visibleRoiRect.height = visImg.size().height;
+		visibleRoiRect.width = visImg.size().width;
+
+		cloudRoiRect.x = 0;
+		cloudRoiRect.y = 0;
+		cloudRoiRect.height = 0;
+		cloudRoiRect.width = 0;
 
 		imCombined = combined;
 	}
@@ -603,8 +618,12 @@ int CameraAlign::init()
 	bool staticRectifyImages_ = false;
 
 	void CameraAlign::rectifyManually(cv::Mat& irImgIn, cv::Mat& visImgIn, cv::Mat& cloudImgIn)
-	{
+	{	
 		cv::Mat imCombined, homography, imFitted, imBlended, ROI;
+
+		// temp
+		cv::Mat imFused;
+		int iThermalAlpha_ = 50, iColorAlpha_ = 50;
 
 		double alpha = 0.5; double beta = 1 - alpha;
 
@@ -613,6 +632,8 @@ int CameraAlign::init()
 		showAlignWindow(irImgIn, visImgIn, cloudImgIn, imCombined, rectifyWindowsName);
 
 		combinedImage = imCombined.clone();
+
+		FuseOps fo(logger_);
 
 		std::cout << "Press: 'c' : clear, 'f' : fuse, 'a' : accept, 'q' : quit" << std::endl;
 
@@ -680,6 +701,10 @@ int CameraAlign::init()
 					cv::warpPerspective(irImage_->image, imFitted, homography, rgbImage_->image.size());
 
 					cv::imshow("imFitted", imFitted);
+
+					fo.fuse(irImage_->image, rgbImage_->image, imFused, homography, iThermalAlpha_, iColorAlpha_);
+
+					cv::imshow("imFused", imFused);
 
 					//ROI = im1(Rect(0, 1, imFitted.cols, imFitted.rows));
 

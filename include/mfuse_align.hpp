@@ -34,8 +34,9 @@
 #include <sensor_msgs/PointCloud2.h>
 
 #include <mfuse_cloud_ops.hpp>
+#include <mfuse_fuse_ops.hpp>
 #include <colmap.hpp>
-//#include <mfuse_logger.hpp>
+#include <mfuse_logger.hpp>
 
 namespace mfuse
 {

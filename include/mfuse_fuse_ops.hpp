@@ -4,7 +4,7 @@
 #include "opencv2/opencv.hpp"
 
 //#include <mfuse_cloud_ops.hpp>
-//#include <mfuse_logger.hpp>
+#include <mfuse_logger.hpp>
 
 namespace mfuse
 {
@@ -20,10 +20,11 @@ private:
     double thermalAlpha = .5;
     double colorAlpha = .5;
     bool gotMasks = false;
+    std::shared_ptr<spdlog::logger> logger_;
 
 public:
 
-    explicit FuseOps();
+    explicit FuseOps(std::shared_ptr<spdlog::logger> logger);
     ~FuseOps();
 
     static int readWarpFile(const std::string filename, cv::Mat& warp);

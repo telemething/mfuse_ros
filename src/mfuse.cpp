@@ -175,7 +175,7 @@ int CameraFuse::fusionloop()
   std::vector<cv::Point2f> warpedBBox;
   cv::Mat roiIncludeMask, roiExcludeMask;
 
-  FuseOps fo;
+  FuseOps fo(logger_);
 
   while(true)
   {     

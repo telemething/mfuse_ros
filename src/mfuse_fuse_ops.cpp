@@ -17,8 +17,9 @@ namespace mfuse
 //*
 //******************************************************************************
 
-FuseOps::FuseOps()
+FuseOps::FuseOps(std::shared_ptr<spdlog::logger> logger)
 {
+  logger_ = logger;
 }
 
 //*****************************************************************************
@@ -186,12 +187,12 @@ int FuseOps::fuse(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage,
     catch(const std::exception& e)
     {
       //ROS_ERROR("--- EXCEPTION --- CameraFuse::fusionloop: %s", e.what());
-      //logger_->error("- EXCEPTION --- CameraFuse::fusionloop: {}", e.what());
+      logger_->error("- EXCEPTION --- FuseOps::fuse(): {}", e.what());
     }
     catch(...)
     {
       //ROS_ERROR("--- EXCEPTION --- CameraFuse::fusionloop: -undefined-");
-      //logger_->error("--- EXCEPTION --- CameraFuse::fusionloop: -undefined-");
+      logger_->error("--- EXCEPTION --- FuseOps::fuse)(): -undefined-");
     }
 
   return 0; 
