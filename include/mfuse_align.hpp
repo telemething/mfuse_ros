@@ -47,6 +47,9 @@ public:
   struct matchPointType { cv::Point2i begin; cv::Point2i end; };
   struct matchPointType2 { cv::Point2i cloud; cv::Point2i visible; cv::Point2i ir; };
   explicit CameraAlign(ros::NodeHandle nh);
+  void setCloudProjectionDepthMin(int depth);
+  void setCloudProjectionDepthMax(int depth);
+  void setCloudProjectionDepthTrack(int depth);
   ~CameraAlign();
   void DoFuse();
 
@@ -85,7 +88,8 @@ private:
   int iThermalAlpha = 50;
   int iColorAlpha = 50;
 
-  int projectionImageWidth_ = 1000, projectionImageHeight_ = 1000, projectionImageScale_ = 10;
+  int projectionImageWidth_ = 500, projectionImageHeight_ = 500, projectionImageScale_ = 10;
+  int projectionImageDepthMin_ = 0, projectionImageDepthMax_ = 255, projectionImageDepthTrack_ = 127;
 
   // ROS subscribers 
   image_transport::Subscriber rgbSubscriber_;

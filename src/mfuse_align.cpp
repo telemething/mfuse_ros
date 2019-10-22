@@ -448,7 +448,121 @@ int CameraAlign::init()
 	//
 	//*****************************************************************************
 
+	int lastTrack_ = 0;
+	int lastMin_ = 0;
+	int lastMax_ = 0;
+
+	void CameraAlign::setCloudProjectionDepthMin(int depth)
+	{
+		if(depth != lastMin_)
+		{
+			lastTrack_ = (depth + projectionImageDepthMax_) / 2;
+			cv::setTrackbarPos("Both", rectifyWindowsName, lastTrack_);
+		}
+
+		cloudOps_.SetDepthRange(depth, projectionImageDepthMax_);
+	}
+
+	void CameraAlign::setCloudProjectionDepthMax(int depth)
+	{
+		if(depth != lastMax_)
+		{
+			lastTrack_ = (depth + projectionImageDepthMin_) / 2;
+			cv::setTrackbarPos("Both", rectifyWindowsName, lastTrack_);
+		}
+
+		cloudOps_.SetDepthRange(projectionImageDepthMin_, depth);
+	}
+
+	void CameraAlign::setCloudProjectionDepthTrack(int depth)
+	{
+		if(depth != lastTrack_)
+		{
+			lastMin_ = projectionImageDepthMin_ + depth - lastTrack_;
+			lastMax_ = projectionImageDepthMax_ + depth - lastTrack_;
+			lastTrack_ = depth;
+
+			cv::setTrackbarPos("Min", rectifyWindowsName, lastMin_);
+			cv::setTrackbarPos("Max", rectifyWindowsName, lastMax_);
+			
+			printf("--- depth change : %i ---\r\n", depth - lastTrack_);
+		}
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	void minDepthChanged(int depth, void* parentP)
+	{
+		auto ca = static_cast<CameraAlign*>(parentP);
+		ca->setCloudProjectionDepthMin(depth);
+	}
+
+	void maxDepthChanged(int depth, void* parentP)
+	{
+		auto ca = static_cast<CameraAlign*>(parentP);
+		ca->setCloudProjectionDepthMax(depth);
+	}
+
+	void trackDepthChanged(int depth, void* parentP)
+	{
+		auto ca = static_cast<CameraAlign*>(parentP);
+		ca->setCloudProjectionDepthTrack(depth);
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
 	void CameraAlign::showAlignWindow(const cv::Mat& im1, const cv::Mat& im2, 
+		const cv::Mat& im3, cv::Mat& imCombined, const std::string windowName)
+	{
+		combineImages(im1, im2, im3, imCombined);
+
+		if(!alignWindowCreated_)
+		{
+			if (0 == windowName.length())
+			{
+				logger_->error("CameraAlign::showAlignWindow() : windowName.length = 0");
+				return;
+			}
+			{
+				//namedWindow("aaa1", WINDOW_GUI_EXPANDED);
+				cv::namedWindow(windowName.c_str(), cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
+				cv::createTrackbar("Min", windowName.c_str(), &projectionImageDepthMin_, 255, minDepthChanged, this);
+				cv::createTrackbar("Max", windowName.c_str(), &projectionImageDepthMax_, 255, maxDepthChanged, this);
+				cv::createTrackbar("Both", windowName.c_str(), &projectionImageDepthTrack_, 255,  trackDepthChanged, this);
+
+				cv::createButton("Undo Last", undoLastButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
+				cv::createButton("Clear", clearButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
+				cv::createButton("Fuse", fuseButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
+				cv::createButton("Accept", acceptButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
+				cv::createButton("Quit", quitButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
+
+				cv::setMouseCallback(windowName.c_str(), manualRectifyMouseCallback, this);	
+				cv::displayStatusBar(windowName.c_str(), "--- select first point ---", 0);
+
+				alignWindowCreated_ = true;
+			}
+
+		}
+			
+		drawMatchPoints(imCombined, matchPoints2);
+		cv::imshow(windowName.c_str(), imCombined);
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	/*void CameraAlign::showFusedWindow(const cv::Mat& im1, const cv::Mat& im2, 
 		const cv::Mat& im3, cv::Mat& imCombined, const std::string windowName)
 	{
 		combineImages(im1, im2, im3, imCombined);
@@ -482,7 +596,7 @@ int CameraAlign::init()
 			
 		drawMatchPoints(imCombined, matchPoints2);
 		cv::imshow(windowName.c_str(), imCombined);
-	}
+	}*/
 
 	//*****************************************************************************
 	//

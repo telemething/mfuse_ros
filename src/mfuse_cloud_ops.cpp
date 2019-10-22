@@ -64,6 +64,9 @@ void CloudOps::SetDepthRange(int minDepth, int maxDepth)
 {
   minDepth_ = minDepth;
   maxDepth_ = maxDepth;
+
+  // reset intensity scaler
+  maxX = 0;
 }
 
 //*****************************************************************************
