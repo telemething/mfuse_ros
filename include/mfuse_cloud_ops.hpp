@@ -77,6 +77,7 @@ private:
 
   int projectionImageWidth_, projectionImageHeight_, projectionImageScale_;
   int minDepth_ = 0, maxDepth_ = 1000;
+  float distToProjPlane_ = 65;
 
   bool collectCloudDataStats_ = false;
   bool autoScaleColorMap_ = true;

@@ -160,10 +160,12 @@ void CloudOps::toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud,
         if(colorizeLUT)
           theColor = colmap_->_lut.at<cv::Vec3b>(0,cloud[x].x * intensityScale);
 
-        //if(0 < cloud[x].x && 0 < cloud[x].y)
+        if(0 < cloud[x].x)
         {
-          auto pixel = &outImage.at<cv::Vec3b>((scale * -cloud[x].z) + width/2, 
-            (scale * -cloud[x].y) + height/2);
+          float imgRow = (scale * -cloud[x].z) * (distToProjPlane_ / cloud[x].x) + width/2;
+          float imgCol = (scale * -cloud[x].y) * (distToProjPlane_ / cloud[x].x) + height/2;
+                
+          auto pixel = &outImage.at<cv::Vec3b>(imgRow,imgCol);
           memcpy( pixel, &theColor, 3 * sizeof(uint8_t));
         }
       }

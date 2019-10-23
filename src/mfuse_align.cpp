@@ -152,11 +152,14 @@ int CameraAlign::init()
 	projectionImageWidth_ = 500;
 	projectionImageHeight_ = 500;
 	projectionImageScale_ = 10;
-
+	projectionImageDepthMin_ = 0;
+	projectionImageDepthMax_ = 255;
+	projectionImageDepthTrack_ = 127;
+	
 	cloudOps_.SetQueueSize(200);
 	cloudOps_.RunCurrentCloudCreationThread(projectionImageWidth_, 
 		projectionImageHeight_, projectionImageScale_, 100 );
-	cloudOps_.SetDepthRange(0,50);
+	cloudOps_.SetDepthRange(projectionImageDepthMin_,projectionImageDepthMax_);
 
     // initialize or load the warp matrix
 	/*if (warpType_ == cv::MOTION_HOMOGRAPHY)
