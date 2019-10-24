@@ -53,6 +53,20 @@ int FuseOps::readWarpFile(const std::string filename, cv::Mat& warp)
 	return 1;
 }
 
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+int FuseOps::writeWarpFile(const std::string fileName, const cv::Mat& warp)
+{
+	cv::FileStorage fs(fileName, cv::FileStorage::WRITE);
+	fs << "warpMatrix" << warp;
+	fs.release();
+	return 1;
+}
+
 //*****************************************************************************
 //
 //
@@ -120,7 +134,7 @@ cv::Mat FuseOps::getMask(const cv::Mat original, const std::vector<cv::Point2f> 
 //******************************************************************************
 
 int FuseOps::fuse(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage, 
-    const cv::Mat& warpMatrix, const int iThermalAlpha, const int iColorAlpha)
+    const cv::Mat& warpMatrix, const int iThermalAlpha, const int iColorAlpha, bool colorize)
 { 
     try
     {
@@ -135,18 +149,21 @@ int FuseOps::fuse(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage,
       thermalAlpha = iThermalAlpha / 100.0;
       colorAlpha = iColorAlpha / 100.0;
 
-      // invert pixel intensity so that colorizer works in correct direction
-      cv::bitwise_not(irImage, irImage);
+      if(colorize)
+      {
+        // invert pixel intensity so that colorizer works in correct direction
+        cv::bitwise_not(irImage, irImage);
 
-      // colorize 
-      cv::applyColorMap(irImage, imColorized, cv::ColormapTypes::COLORMAP_RAINBOW);
+        // colorize 
+        cv::applyColorMap(irImage, imColorized, cv::ColormapTypes::COLORMAP_RAINBOW);
 
-      // show the image
-      if (showDebugImages_)
-        cv::imshow("imColorized", imColorized);
+        // show the image
+        if (showDebugImages_)
+          cv::imshow("imColorized", imColorized);
 
-      // merge the color and gray thermal images
-      cv::addWeighted(irImage, 1 - colorAlpha, imColorized, colorAlpha, 0.0, irImage);
+        // merge the color and gray thermal images
+        cv::addWeighted(irImage, 1 - colorAlpha, imColorized, colorAlpha, 0.0, irImage);
+      }
 
       // warp the thermal image to the perspective of the visible image
       cv::warpPerspective(irImage, imWarped, warpMatrix, rgbImage.size());

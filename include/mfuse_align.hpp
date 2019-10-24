@@ -52,6 +52,8 @@ public:
   void setCloudProjectionDepthTrack(int depth);
   ~CameraAlign();
   void DoFuse();
+  void DoAccept();
+  void DoQuit();
 
 private:
 
@@ -61,9 +63,15 @@ private:
   int logloopTimeoutMilliseconds_ = 250;
   std::string rgbInImageShowName_ = "RGB In";
   std::string irInImageShowName_ = "IR In";
-  std::string warpFileName = "thewarp.json";
+  std::string warpFileNameIrOnVis = "WarpIrOnVis.json";
+  std::string warpFileNameIrOnCloud = "WarpIrOnCloud.json";
+  std::string warpFileNameVisOnCloud = "WarpVisOnCloud.json";
   std::string fusedImageDisplayName_ = "Fused Image";
   std::string cloudProjectionDisplayName_ = "Cloud Projection";
+
+  std::string imFusedIrOnVisDisplayName_ = "imFusedIrOnVis";
+  std::string imFusedIrOnCloudDisplayName_ = "imFusedIrOnCloud";
+  std::string imFusedVisOnCloudDisplayName_ = "imFusedVisOnCloud";
 
   bool showCameraInStreams_ = false;
   bool showDebugImages_ = false;
@@ -101,6 +109,9 @@ private:
   boost::shared_mutex mutexCloudProjectionImage_;  
   boost::shared_mutex mutexFusedImage_;
 
+	cv::Mat homographyIrOnVis_, homographyIrOnCloud_, homographyVisOnCloud_;
+  bool haveHomographyIrOnVis_ = false, haveHomographyIrOnCloud_ = false, haveHomographyVisOnCloud_ = false;
+
   cv_bridge::CvImagePtr rgbImage_;
   cv_bridge::CvImagePtr irImage_;
   cv::Mat cloudProjectionImage_;
@@ -121,8 +132,7 @@ private:
   void irCameraCallback(const sensor_msgs::ImageConstPtr& msg);
   void pcInCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
 
-  int readWarp(const std::string filename, cv::Mat& warp);
-	int saveWarp(const std::string fileName, const cv::Mat& warp);
+  int readWarpFiles();
 
 	void getSideBySideImage(const cv::Mat& im1, const cv::Mat& im2, 
     cv::Mat& imCombined, const std::string windowName);
@@ -135,8 +145,19 @@ private:
 		const cv::Mat& im3, cv::Mat& imCombined);
   void drawMatchPoints(const cv::Mat& img, std::vector<CameraAlign::matchPointType2>& points);
 	cv::Mat calculateHomography(std::vector<matchPointType> matchPoints);
-  cv::Mat calculateHomography(std::vector<matchPointType2> matchPoints);
+  cv::Mat calculateHomographyIrOnVis(std::vector<matchPointType2> matchPoints);
+  cv::Mat calculateHomographyIrOnCloud(std::vector<matchPointType2> matchPoints);
+  cv::Mat calculateHomographyVisOnCloud(std::vector<matchPointType2> matchPoints);
 	void rectifyManually(cv::Mat& im1, cv::Mat& im2, cv::Mat& im3);
+
+  void createFusedWindows();
+
+  void showIrOnVisWindow(const cv::Mat& im1, const std::string windowName);
+  void showIrOnCloudWindow(const cv::Mat& im1, const std::string windowName);
+  void showVisOnCloudWindow(const cv::Mat& im1, const std::string windowName);
+
+  bool irOnVisWindowCreated_ = false, irOnCloudWindowCreated_ = false, visOnCloudWindowCreated_ = false;
+
   int displayloop();
 
 }; // class CameraAlign   

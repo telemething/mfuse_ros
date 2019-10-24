@@ -161,6 +161,8 @@ int CameraAlign::init()
 		projectionImageHeight_, projectionImageScale_, 100 );
 	cloudOps_.SetDepthRange(projectionImageDepthMin_,projectionImageDepthMax_);
 
+	readWarpFiles();
+
     // initialize or load the warp matrix
 	/*if (warpType_ == cv::MOTION_HOMOGRAPHY)
 		warpMatrix = cv::Mat::eye(3, 3, CV_32F);
@@ -176,29 +178,15 @@ int CameraAlign::init()
 	//
 	//*****************************************************************************
 
-	int CameraAlign::readWarp(const std::string filename, cv::Mat& warp)
+	int CameraAlign::readWarpFiles()
 	{
-		cv::FileStorage fs2(filename, cv::FileStorage::READ);
-		fs2["warpMatrix"] >> warp;
-		fs2.release();
+		if( 1 == FuseOps::readWarpFile(warpFileNameIrOnVis, homographyIrOnVis_))
+			haveHomographyIrOnVis_ = true;
+		if( 1 == FuseOps::readWarpFile(warpFileNameIrOnCloud, homographyIrOnCloud_))
+			haveHomographyIrOnCloud_ = true;
+		if( 1 == FuseOps::readWarpFile(warpFileNameVisOnCloud, homographyVisOnCloud_))
+			haveHomographyVisOnCloud_ = true;
 
-		if (nullptr == warp.data)
-			return 0;
-
-		return 1;
-	}
-
-	//*****************************************************************************
-	//
-	//
-	//
-	//*****************************************************************************
-
-	int CameraAlign::saveWarp(const std::string fileName, const cv::Mat& warp)
-	{
-		cv::FileStorage fs(fileName, cv::FileStorage::WRITE);
-		fs << "warpMatrix" << warp;
-		fs.release();
 		return 1;
 	}
 
@@ -365,7 +353,8 @@ int CameraAlign::init()
 
 	static void acceptButtonCallback(int state, void* userdata)
 	{
-
+		auto ca = static_cast<CameraAlign*>(userdata);
+		ca->DoAccept();
 	}
 
 	//*****************************************************************************
@@ -376,7 +365,8 @@ int CameraAlign::init()
 
 	static void quitButtonCallback(int state, void* userdata)
 	{
-
+		auto ca = static_cast<CameraAlign*>(userdata);
+		ca->DoQuit();
 	}
 
 	//*****************************************************************************
@@ -388,6 +378,28 @@ int CameraAlign::init()
 	static void undoLastButtonCallback(int state, void* userdata)
 	{
 		matchPoints2.pop_back();
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	void CameraAlign::DoAccept()
+	{
+		doOp_ = doOpEnum::DoOpFuse;
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	void CameraAlign::DoQuit()
+	{
+		doOp_ = doOpEnum::DoOpFuse;
 	}
 
 	//*****************************************************************************
@@ -565,6 +577,100 @@ int CameraAlign::init()
 	//
 	//*****************************************************************************
 
+	void CameraAlign::showIrOnVisWindow(const cv::Mat& im1, const std::string windowName)
+	{
+		if(!irOnVisWindowCreated_)
+		{
+			if (0 == windowName.length())
+			{
+				logger_->error("CameraAlign::showAlignWindow() : windowName.length = 0");
+				return;
+			}
+			{
+				//namedWindow("aaa1", WINDOW_GUI_EXPANDED);
+				cv::namedWindow(windowName.c_str(), cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
+				irOnVisWindowCreated_ = true;
+			}
+
+		}
+			
+		cv::imshow(windowName.c_str(), im1);
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	void CameraAlign::showIrOnCloudWindow(const cv::Mat& im1, const std::string windowName)
+	{
+		if(!irOnCloudWindowCreated_)
+		{
+			if (0 == windowName.length())
+			{
+				logger_->error("CameraAlign::showAlignWindow() : windowName.length = 0");
+				return;
+			}
+			{
+				//namedWindow("aaa1", WINDOW_GUI_EXPANDED);
+				cv::namedWindow(windowName.c_str(), cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
+				irOnCloudWindowCreated_ = true;
+			}
+
+		}
+			
+		cv::imshow(windowName.c_str(), im1);
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	void CameraAlign::showVisOnCloudWindow(const cv::Mat& im1, const std::string windowName)
+	{
+		if(!visOnCloudWindowCreated_)
+		{
+			if (0 == windowName.length())
+			{
+				logger_->error("CameraAlign::showAlignWindow() : windowName.length = 0");
+				return;
+			}
+			{
+				//namedWindow("aaa1", WINDOW_GUI_EXPANDED);
+				cv::namedWindow(windowName.c_str(), cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
+				visOnCloudWindowCreated_ = true;
+			}
+
+		}
+			
+		cv::imshow(windowName.c_str(), im1);
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	void CameraAlign::createFusedWindows()
+	{
+		cv::namedWindow(imFusedIrOnVisDisplayName_, 
+			cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
+		cv::namedWindow(imFusedIrOnCloudDisplayName_, 
+			cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
+		cv::namedWindow(imFusedVisOnCloudDisplayName_, 
+			cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
 	/*void CameraAlign::showFusedWindow(const cv::Mat& im1, const cv::Mat& im2, 
 		const cv::Mat& im3, cv::Mat& imCombined, const std::string windowName)
 	{
@@ -711,7 +817,7 @@ int CameraAlign::init()
 	//
 	//*****************************************************************************
 
-	cv::Mat CameraAlign::calculateHomography(std::vector<matchPointType2> matchPoints)
+	cv::Mat CameraAlign::calculateHomographyIrOnVis(std::vector<matchPointType2> matchPoints)
 	{
 		std::vector<cv::Point2f> begin, end;
 
@@ -721,9 +827,6 @@ int CameraAlign::init()
 
 			// adjust for visible image right shift
 			shiftedPoint.visible.x -=  visibleRoiRect.x;
-
-			// adjust for cloud image down shift
-			shiftedPoint.cloud.y -= cloudRoiRect.y;
 
 			// should result in same as original
 			begin.push_back(shiftedPoint.ir);
@@ -741,14 +844,69 @@ int CameraAlign::init()
 	//
 	//*****************************************************************************
 
+	cv::Mat CameraAlign::calculateHomographyIrOnCloud(std::vector<matchPointType2> matchPoints)
+	{
+		std::vector<cv::Point2f> begin, end;
+
+		while (!matchPoints.empty())
+		{
+			auto shiftedPoint = matchPoints.back();
+
+			// adjust for cloud image down shift
+			shiftedPoint.cloud.y -= cloudRoiRect.y;
+
+			begin.push_back(shiftedPoint.ir);
+			end.push_back(shiftedPoint.cloud);
+
+			matchPoints.pop_back();
+		}
+
+		return findHomography(begin, end);
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	cv::Mat CameraAlign::calculateHomographyVisOnCloud(std::vector<matchPointType2> matchPoints)
+	{
+		std::vector<cv::Point2f> begin, end;
+
+		while (!matchPoints.empty())
+		{
+			auto shiftedPoint = matchPoints.back();
+
+			// adjust for visible image right shift
+			shiftedPoint.visible.x -=  visibleRoiRect.x;
+
+			// adjust for cloud image down shift
+			shiftedPoint.cloud.y -= cloudRoiRect.y;
+
+			// should result in same as original
+			begin.push_back(shiftedPoint.visible);
+			end.push_back(shiftedPoint.cloud);
+
+			matchPoints.pop_back();
+		}
+
+		return findHomography(begin, end);
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
 	bool staticRectifyImages_ = false;
 
 	void CameraAlign::rectifyManually(cv::Mat& irImgIn, cv::Mat& visImgIn, cv::Mat& cloudImgIn)
 	{	
-		cv::Mat imCombined, homography, imFitted, imBlended, ROI, irImg, visImg, cloudProjectionImage;
-
-		// temp
-		cv::Mat imFused;
+		//cv::Mat imCombined, imFitted, imBlended, ROI, irImg, visImg, cloudProjectionImage;
+		cv::Mat imCombined, irImg, visImg, cloudProjectionImage;
+		cv::Mat imFusedIrOnVis, imFusedIrOnCloud, imFusedVisOnCloud;
 		int iThermalAlpha_ = 50, iColorAlpha_ = 50;
 
 		double alpha = 0.5; double beta = 1 - alpha;
@@ -787,6 +945,28 @@ int CameraAlign::init()
 				showAlignWindow(irImg, visImg, cloudProjectionImage, imCombined, rectifyWindowsName);
 			}
 
+			if(true)
+			{
+				/*if(haveHomographyIrOnVis_)
+				{
+					fo.fuse(irImage_->image, rgbImage_->image, imFusedIrOnVis, 
+						homographyIrOnVis_, iThermalAlpha_, iColorAlpha_, true);
+					showIrOnVisWindow(imFusedIrOnVis, imFusedIrOnVisDisplayName_);
+				}
+				if(haveHomographyIrOnCloud_)
+				{
+					fo.fuse(irImage_->image, cloudProjectionImage, imFusedIrOnCloud, 
+						homographyIrOnCloud_, iThermalAlpha_, iColorAlpha_, true);
+					showIrOnCloudWindow(imFusedIrOnCloud, imFusedIrOnCloudDisplayName_);
+				}*/
+				if(haveHomographyVisOnCloud_)
+				{
+					fo.fuse(rgbImage_->image, cloudProjectionImage, imFusedVisOnCloud, 
+						homographyVisOnCloud_, iThermalAlpha_, iColorAlpha_, false);
+					cv::imshow(imFusedVisOnCloudDisplayName_, imFusedVisOnCloud);
+				}
+			}
+
 			int keyPressed = cv::waitKey(30);
 
 			if (keyPressed != -1)
@@ -822,30 +1002,30 @@ int CameraAlign::init()
 					doOp_ = doOpEnum::DoOpNothing;
 
 					// get homogarphy
-					homography = calculateHomography(matchPoints2);
+					homographyIrOnVis_ = calculateHomographyIrOnVis(matchPoints2);
+					homographyIrOnCloud_ = calculateHomographyIrOnCloud(matchPoints2);
+					homographyVisOnCloud_ = calculateHomographyVisOnCloud(matchPoints2);
 
-					//saveWarp(warpFileName, homography);
+					//// Warp source image to destination based on homography
+					////cv::warpPerspective(irImgIn, imFitted, homography, visImgIn.size());
+					////cv::warpPerspective(irImage_->image, imFitted, homographyIrOnVis_, rgbImage_->image.size());
+					////cv::imshow("imFitted", imFitted);
 
-					// Warp source image to destination based on homography
-					//cv::warpPerspective(irImgIn, imFitted, homography, visImgIn.size());
-					cv::warpPerspective(irImage_->image, imFitted, homography, rgbImage_->image.size());
-
-					cv::imshow("imFitted", imFitted);
-
-					fo.fuse(irImage_->image, rgbImage_->image, imFused, homography, iThermalAlpha_, iColorAlpha_);
-
-					cv::imshow("imFused", imFused);
-
-					//ROI = im1(Rect(0, 1, imFitted.cols, imFitted.rows));
-
-					//addWeighted(ROI, alpha, imFitted, beta, 0.0, imBlended);
-
-					//imshow("blended", imBlended);
+					//fo.fuse(irImage_->image, rgbImage_->image, imFusedIrOnVis, homographyIrOnVis_, iThermalAlpha_, iColorAlpha_);
+					//cv::imshow("imFusedIrOnVis", imFusedIrOnVis);
 
 					break;
 				case doOpEnum::DoOpAccept:
-					return;
+
+					doOp_ = doOpEnum::DoOpNothing;
+
+					FuseOps::writeWarpFile(warpFileNameIrOnVis, homographyIrOnVis_);
+					FuseOps::writeWarpFile(warpFileNameIrOnCloud, homographyIrOnCloud_);
+					FuseOps::writeWarpFile(warpFileNameVisOnCloud, homographyVisOnCloud_);
+
+					break;
 				case doOpEnum::DoOpQuit:
+					doOp_ = doOpEnum::DoOpNothing;
 					return;
 				default:
 					break;

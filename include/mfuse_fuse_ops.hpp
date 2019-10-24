@@ -28,11 +28,12 @@ public:
     ~FuseOps();
 
     static int readWarpFile(const std::string filename, cv::Mat& warp);
+    static int writeWarpFile(const std::string fileName, const cv::Mat& warp);
     static int DrawROI(cv::Mat image, std::vector<cv::Point2f> outline);
     static std::vector<cv::Point2f> getTransposedBBox(const cv::Mat original, const cv::Mat warpMatrix);
     static cv::Mat getMask(const cv::Mat original, const std::vector<cv::Point2f> area, const bool include) ;
     int fuse(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage, 
-        const cv::Mat& warpMatrix, const int iThermalAlpha, const int iColorAlpha);
+        const cv::Mat& warpMatrix, const int iThermalAlpha, const int iColorAlpha, bool colorize);
 
 }; // class FuseOps   
 } // namespace mfuse
