@@ -208,6 +208,14 @@ int CameraAlign::init()
 
 	}
 
+	static inline void drawUnderwayPoint(const cv::Mat& img, cv::Point2i& pnt)
+	{
+		cv::circle(img, pnt, circleRadius_+4, 
+			cv::Scalar(0, 0, 255), circleThickness_ + 1);
+		cv::circle(img, pnt, circleRadius_+8, 
+			cv::Scalar(0, 0, 255), circleThickness_ + 1);
+	}
+
   	//*****************************************************************************
 	//
 	//
@@ -215,24 +223,74 @@ int CameraAlign::init()
 	//*****************************************************************************
 
 	void CameraAlign::drawMatchPoints(const cv::Mat& img, 
-		std::vector<CameraAlign::matchPointType2>& points)
+		std::vector<CameraAlign::matchPointType2>& points, 
+		CameraAlign::matchPointType2 pointUnderway)
 	{
+		cv::Point2i lineStart;
+		cv::Point2i lineEnd;
+
+		if(pointUnderway.ir.x > 0)
+			drawUnderwayPoint(img, pointUnderway.ir);
+
+		if(pointUnderway.visible.x > 0)
+			drawUnderwayPoint(img, pointUnderway.visible);
+
+		if(pointUnderway.cloud.x > 0)
+			drawUnderwayPoint(img, pointUnderway.cloud);
+
 		for (std::vector<CameraAlign::matchPointType2>::iterator it = points.begin(); 
 			it != points.end(); ++it)
 		{
-			drawMatchPoint(img, it->cloud);
-			drawMatchPoint(img, it->ir);
-			drawMatchPoint(img, it->visible);
+			lineStart.x = 0;
+			lineEnd.x = 0;
+
+			if(it->cloud.x > 0)
+			{
+				drawMatchPoint(img, it->cloud);
+
+				lineStart.x = it->cloud.x;
+				lineStart.y = it->cloud.y;
+			}
+
+			if(it->ir.x > 0)
+			{
+				drawMatchPoint(img, it->ir);
+
+				if(0 == lineStart.x)
+				{
+					lineStart.x = it->ir.x;
+					lineStart.y = it->ir.y;
+				}
+				else
+				{
+					lineEnd.x = it->ir.x;
+					lineEnd.y = it->ir.y;
+				}
+			}
+
+			if(it->visible.x > 0)
+			{
+				drawMatchPoint(img, it->visible);
+
+				lineEnd.x = it->visible.x;
+				lineEnd.y = it->visible.y;
+			}
+
+			if(showLines)
+			if( lineStart.x > 0)
+			{
+				cv::line(img, lineStart, lineEnd, cv::Scalar(110, 220, 0), 1, 8);
+			}
 		}
 	}
 
 	//*****************************************************************************
 	//
-	//
+	// V1 : Set is complete when three images have been clicked
 	//
 	//*****************************************************************************
 
-	static void addMatchPoint(cv::Point2i hitPoint)
+	/*static void addMatchPoint(cv::Point2i hitPoint)
 	{
 		if( irRoiRect.contains(hitPoint) )
 		{
@@ -258,41 +316,50 @@ int CameraAlign::init()
 
 			printf("--- matchpoint set complete ---\r\n");
 		}
-	}
-
-	//*****************************************************************************
-	//
-	//
-	//
-	//*****************************************************************************
-
-	/*static void manualRectifyMouseCallback(int event, int x, int y, int flags, void* userdata)
-	{
-		if (event == cv::MouseEventTypes::EVENT_LBUTTONDOWN)
-		{
-			matchPoint.begin.x = x;
-			matchPoint.begin.y = y;
-		}
-		if (event == cv::MouseEventTypes::EVENT_LBUTTONUP)
-		{
-			if (matchPointEndWidthOffset > x)
-				return;
-
-			matchPoint.end.x = x;
-			matchPoint.end.y = y;
-
-			cv::line(combinedImage, matchPoint.begin,
-				matchPoint.end, cv::Scalar(110, 220, 0), 1, 8);
-
-			cv::imshow(rectifyWindowsName, combinedImage);
-
-			matchPoint.end.x -= matchPointEndWidthOffset;
-			matchPoints.push_back({ matchPoint });
-
-			printf("Added matchPoint (%i,%i),(%i,%i)\r\n",
-				matchPoint.begin.x, matchPoint.begin.y, matchPoint.end.x, matchPoint.end.y);
-		}
 	}*/
+
+	//*****************************************************************************
+	//
+	// V2: set complete when two points are clicked
+	//
+	//*****************************************************************************
+
+	static void addMatchPoint(cv::Point2i hitPoint)
+	{
+		int pointCount = 0; 
+
+		if( irRoiRect.contains(hitPoint) )
+		{
+			matchPoint2.ir = hitPoint;
+		}
+		else if( visibleRoiRect.contains(hitPoint) )
+		{
+			matchPoint2.visible = hitPoint;
+		}
+		else if( cloudRoiRect.contains(hitPoint) )
+		{
+			matchPoint2.cloud = hitPoint;
+		}
+
+		if(matchPoint2.ir.x > 0)
+			pointCount++;
+		if(matchPoint2.visible.x > 0)
+			pointCount++;
+		if(matchPoint2.cloud.x > 0)
+			pointCount++;
+
+		// if two points are set, push them
+		if(pointCount > 1)
+		{
+			matchPoints2.push_back(matchPoint2);
+
+			matchPoint2.ir = cv::Point2i(0,0);
+			matchPoint2.visible = matchPoint2.ir;
+			matchPoint2.cloud = matchPoint2.ir;
+
+			printf("--- matchpoint set complete ---\r\n");
+		}
+	}
 
 	//*****************************************************************************
 	//
@@ -311,10 +378,6 @@ int CameraAlign::init()
 			if(lastMouseEvent_ == cv::MouseEventTypes::EVENT_LBUTTONDOWN)
 			printf("--- click (%i,%i)\r\n",x,y);
 			cv::displayStatusBar(rectifyWindowsName, "--- click ---", 0);
-
-			//cv::circle(hitPoint,)
-
-			//matchPointType2> matchPoints_
 
 			addMatchPoint(hitPoint);
 		}
@@ -386,9 +449,21 @@ int CameraAlign::init()
 	//
 	//*****************************************************************************
 
+	static void showLinesCallback(int state, void* userdata)
+	{
+		auto ca = static_cast<CameraAlign*>(userdata);
+		ca->showLines = !ca->showLines;
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
 	void CameraAlign::DoAccept()
 	{
-		doOp_ = doOpEnum::DoOpFuse;
+		doOp_ = doOpEnum::DoOpAccept;
 	}
 
 	//*****************************************************************************
@@ -399,7 +474,7 @@ int CameraAlign::init()
 
 	void CameraAlign::DoQuit()
 	{
-		doOp_ = doOpEnum::DoOpFuse;
+		doOp_ = doOpEnum::DoOpQuit;
 	}
 
 	//*****************************************************************************
@@ -411,50 +486,6 @@ int CameraAlign::init()
 	void CameraAlign::DoFuse()
 	{
 		doOp_ = doOpEnum::DoOpFuse;
-	}
-
-	//*****************************************************************************
-	//
-	//
-	//
-	//*****************************************************************************
-
-	void CameraAlign::getSideBySideImage(const cv::Mat& im1, const cv::Mat& im2, 
-		cv::Mat& imCombined, const std::string windowName)
-	{
-		cv::Mat combined( std::max(im1.size().height, im2.size().height),
-			im1.size().width + im2.size().width, CV_8UC3);
-
-		matchPointEndWidthOffset = im1.size().width;
-
-		//printf("combined frame c r : %i %i\r\n", combined.cols, combined.rows);
-
-		cv::Mat left_roi(combined, cv::Rect(0, 0, im1.size().width, im1.size().height));
-		im1.copyTo(left_roi);
-		cv::Mat right_roi(combined, cv::Rect(im1.size().width, 0, im2.size().width, im2.size().height));
-		im2.copyTo(right_roi);
-
-		imCombined = combined;
-
-		if (0 < windowName.length())
-		{
-			//namedWindow("aaa1", WINDOW_GUI_EXPANDED);
-			cv::namedWindow(windowName.c_str(), cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
-			cv::createTrackbar("Thermal", windowName.c_str(), &iThermalAlpha, 100);
-	  		cv::createTrackbar("Color", windowName.c_str(), &iColorAlpha, 100);
-
-			cv::createButton("Undo Last", undoLastButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
-			cv::createButton("Clear", clearButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
-			cv::createButton("Fuse", fuseButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
-			cv::createButton("Accept", acceptButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
-			cv::createButton("Quit", quitButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
-
-			cv::setMouseCallback(windowName.c_str(), manualRectifyMouseCallback, this);
-			cv::displayStatusBar(windowName.c_str(), "--- select a thing ---", 0);
-
-
-			cv::imshow(windowName.c_str(), combined);
-		}
 	}
 
 	//*****************************************************************************
@@ -553,6 +584,7 @@ int CameraAlign::init()
 				cv::createTrackbar("Max", windowName.c_str(), &projectionImageDepthMax_, 255, maxDepthChanged, this);
 				cv::createTrackbar("Both", windowName.c_str(), &projectionImageDepthTrack_, 255,  trackDepthChanged, this);
 
+				cv::createButton("Show Lines", showLinesCallback, this, cv::QT_PUSH_BUTTON, 0 );
 				cv::createButton("Undo Last", undoLastButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
 				cv::createButton("Clear", clearButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
 				cv::createButton("Fuse", fuseButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
@@ -567,7 +599,7 @@ int CameraAlign::init()
 
 		}
 			
-		drawMatchPoints(imCombined, matchPoints2);
+		drawMatchPoints(imCombined, matchPoints2, matchPoint2);
 		cv::imshow(windowName.c_str(), imCombined);
 	}
 
@@ -589,6 +621,7 @@ int CameraAlign::init()
 			{
 				//namedWindow("aaa1", WINDOW_GUI_EXPANDED);
 				cv::namedWindow(windowName.c_str(), cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
+				cv::createTrackbar("VisToCloud", windowName.c_str(), &irToVisBlend_, 100);
 				irOnVisWindowCreated_ = true;
 			}
 
@@ -615,6 +648,7 @@ int CameraAlign::init()
 			{
 				//namedWindow("aaa1", WINDOW_GUI_EXPANDED);
 				cv::namedWindow(windowName.c_str(), cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
+				cv::createTrackbar("VisToCloud", windowName.c_str(), &irToCloudBlend_, 100);
 				irOnCloudWindowCreated_ = true;
 			}
 
@@ -641,6 +675,7 @@ int CameraAlign::init()
 			{
 				//namedWindow("aaa1", WINDOW_GUI_EXPANDED);
 				cv::namedWindow(windowName.c_str(), cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
+				cv::createTrackbar("VisToCloud", windowName.c_str(), &visToCloudBlend_, 100);
 				visOnCloudWindowCreated_ = true;
 			}
 
@@ -664,48 +699,6 @@ int CameraAlign::init()
 		cv::namedWindow(imFusedVisOnCloudDisplayName_, 
 			cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
 	}
-
-	//*****************************************************************************
-	//
-	//
-	//
-	//*****************************************************************************
-
-	/*void CameraAlign::showFusedWindow(const cv::Mat& im1, const cv::Mat& im2, 
-		const cv::Mat& im3, cv::Mat& imCombined, const std::string windowName)
-	{
-		combineImages(im1, im2, im3, imCombined);
-
-		if(!alignWindowCreated_)
-		{
-			if (0 == windowName.length())
-			{
-				logger_->error("CameraAlign::showAlignWindow() : windowName.length = 0");
-				return;
-			}
-			{
-				//namedWindow("aaa1", WINDOW_GUI_EXPANDED);
-				cv::namedWindow(windowName.c_str(), cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO | cv::WINDOW_GUI_EXPANDED);
-				cv::createTrackbar("Thermal", windowName.c_str(), &iThermalAlpha, 100);
-				cv::createTrackbar("Color", windowName.c_str(), &iColorAlpha, 100);
-
-				cv::createButton("Undo Last", undoLastButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
-				cv::createButton("Clear", clearButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
-				cv::createButton("Fuse", fuseButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
-				cv::createButton("Accept", acceptButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
-				cv::createButton("Quit", quitButtonCallback, this, cv::QT_PUSH_BUTTON, 0 );
-
-				cv::setMouseCallback(windowName.c_str(), manualRectifyMouseCallback, this);	
-				cv::displayStatusBar(windowName.c_str(), "--- select first point ---", 0);
-
-				alignWindowCreated_ = true;
-			}
-
-		}
-			
-		drawMatchPoints(imCombined, matchPoints2);
-		cv::imshow(windowName.c_str(), imCombined);
-	}*/
 
 	//*****************************************************************************
 	//
@@ -817,7 +810,76 @@ int CameraAlign::init()
 	//
 	//*****************************************************************************
 
-	cv::Mat CameraAlign::calculateHomographyIrOnVis(std::vector<matchPointType2> matchPoints)
+	bool CameraAlign::calculateHomographyIrOnVis(std::vector<matchPointType2> matchPoints, cv::Mat& warpOut)
+	{
+		std::vector<cv::Point2f> begin, end;
+
+		while (!matchPoints.empty())
+		{
+			auto shiftedPoint = matchPoints.back();
+
+			if( 0 < shiftedPoint.ir.x && 0 < shiftedPoint.visible.x)
+			{
+				// adjust for visible image right shift
+				shiftedPoint.visible.x -=  visibleRoiRect.x;
+
+				// should result in same as original
+				begin.push_back(shiftedPoint.ir);
+				end.push_back(shiftedPoint.visible);
+			}
+
+			matchPoints.pop_back();
+		}
+
+		if(0 == begin.size())
+			return false;
+
+		warpOut = findHomography(begin, end);
+
+		return true;
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	bool CameraAlign::calculateHomographyIrOnCloud(std::vector<matchPointType2> matchPoints, cv::Mat& warpOut)
+	{
+		std::vector<cv::Point2f> begin, end;
+
+		while (!matchPoints.empty())
+		{
+			auto shiftedPoint = matchPoints.back();
+
+			if( 0 < shiftedPoint.ir.x && 0 < shiftedPoint.cloud.x)
+			{
+				// adjust for cloud image down shift
+				shiftedPoint.cloud.y -= cloudRoiRect.y;
+
+				begin.push_back(shiftedPoint.ir);
+				end.push_back(shiftedPoint.cloud);
+			}
+
+			matchPoints.pop_back();
+		}
+
+		if(0 == begin.size())
+			return false;
+
+		warpOut = findHomography(begin, end);
+
+		return true;
+	}
+
+	//*****************************************************************************
+	//
+	//
+	//
+	//*****************************************************************************
+
+	bool CameraAlign::calculateHomographyVisOnCloud(std::vector<matchPointType2> matchPoints, cv::Mat& warpOut)
 	{
 		std::vector<cv::Point2f> begin, end;
 
@@ -828,70 +890,25 @@ int CameraAlign::init()
 			// adjust for visible image right shift
 			shiftedPoint.visible.x -=  visibleRoiRect.x;
 
-			// should result in same as original
-			begin.push_back(shiftedPoint.ir);
-			end.push_back(shiftedPoint.visible);
+			if( 0 < shiftedPoint.cloud.x && 0 < shiftedPoint.visible.x)
+			{
+				// adjust for cloud image down shift
+				shiftedPoint.cloud.y -= cloudRoiRect.y;
+
+				// should result in same as original
+				begin.push_back(shiftedPoint.visible);
+				end.push_back(shiftedPoint.cloud);
+			}
 
 			matchPoints.pop_back();
 		}
 
-		return findHomography(begin, end);
-	}
+		if(0 == begin.size())
+			return false;
 
-	//*****************************************************************************
-	//
-	//
-	//
-	//*****************************************************************************
+		warpOut = findHomography(begin, end);
 
-	cv::Mat CameraAlign::calculateHomographyIrOnCloud(std::vector<matchPointType2> matchPoints)
-	{
-		std::vector<cv::Point2f> begin, end;
-
-		while (!matchPoints.empty())
-		{
-			auto shiftedPoint = matchPoints.back();
-
-			// adjust for cloud image down shift
-			shiftedPoint.cloud.y -= cloudRoiRect.y;
-
-			begin.push_back(shiftedPoint.ir);
-			end.push_back(shiftedPoint.cloud);
-
-			matchPoints.pop_back();
-		}
-
-		return findHomography(begin, end);
-	}
-
-	//*****************************************************************************
-	//
-	//
-	//
-	//*****************************************************************************
-
-	cv::Mat CameraAlign::calculateHomographyVisOnCloud(std::vector<matchPointType2> matchPoints)
-	{
-		std::vector<cv::Point2f> begin, end;
-
-		while (!matchPoints.empty())
-		{
-			auto shiftedPoint = matchPoints.back();
-
-			// adjust for visible image right shift
-			shiftedPoint.visible.x -=  visibleRoiRect.x;
-
-			// adjust for cloud image down shift
-			shiftedPoint.cloud.y -= cloudRoiRect.y;
-
-			// should result in same as original
-			begin.push_back(shiftedPoint.visible);
-			end.push_back(shiftedPoint.cloud);
-
-			matchPoints.pop_back();
-		}
-
-		return findHomography(begin, end);
+		return true;
 	}
 
 	//*****************************************************************************
@@ -904,19 +921,16 @@ int CameraAlign::init()
 
 	void CameraAlign::rectifyManually(cv::Mat& irImgIn, cv::Mat& visImgIn, cv::Mat& cloudImgIn)
 	{	
-		//cv::Mat imCombined, imFitted, imBlended, ROI, irImg, visImg, cloudProjectionImage;
 		cv::Mat imCombined, irImg, visImg, cloudProjectionImage;
 		cv::Mat imFusedIrOnVis, imFusedIrOnCloud, imFusedVisOnCloud;
 		int iThermalAlpha_ = 50, iColorAlpha_ = 50;
 
 		double alpha = 0.5; double beta = 1 - alpha;
 
-		//getSideBySideImage(irImgIn, visImgIn, imCombined, rectifyWindowsName);
-
 		showAlignWindow(irImgIn, visImgIn, cloudImgIn, imCombined, rectifyWindowsName);
 
 		combinedImage = imCombined.clone();
-
+ 
 		FuseOps fo(logger_);
 
 		std::cout << "Press: 'c' : clear, 'f' : fuse, 'a' : accept, 'q' : quit" << std::endl;
@@ -939,9 +953,6 @@ int CameraAlign::init()
 					cloudProjectionImage_.copyTo(cloudProjectionImage);
 				}
 				
-				//showAlignWindow(irImage_->image, rgbImage_->image, 
-				//	cloudProjectionImage_, imCombined, rectifyWindowsName);
-				
 				showAlignWindow(irImg, visImg, cloudProjectionImage, imCombined, rectifyWindowsName);
 			}
 
@@ -950,20 +961,20 @@ int CameraAlign::init()
 				/*if(haveHomographyIrOnVis_)
 				{
 					fo.fuse(irImage_->image, rgbImage_->image, imFusedIrOnVis, 
-						homographyIrOnVis_, iThermalAlpha_, iColorAlpha_, true);
+						homographyIrOnVis_, irToVisBlend_, iColorAlpha_, true);
 					showIrOnVisWindow(imFusedIrOnVis, imFusedIrOnVisDisplayName_);
 				}
 				if(haveHomographyIrOnCloud_)
 				{
 					fo.fuse(irImage_->image, cloudProjectionImage, imFusedIrOnCloud, 
-						homographyIrOnCloud_, iThermalAlpha_, iColorAlpha_, true);
+						homographyIrOnCloud_, irToCloudBlend_, iColorAlpha_, true);
 					showIrOnCloudWindow(imFusedIrOnCloud, imFusedIrOnCloudDisplayName_);
 				}*/
 				if(haveHomographyVisOnCloud_)
 				{
 					fo.fuse(rgbImage_->image, cloudProjectionImage, imFusedVisOnCloud, 
-						homographyVisOnCloud_, iThermalAlpha_, iColorAlpha_, false);
-					cv::imshow(imFusedVisOnCloudDisplayName_, imFusedVisOnCloud);
+						homographyVisOnCloud_, visToCloudBlend_, 0, false);
+					showVisOnCloudWindow(imFusedVisOnCloud, imFusedVisOnCloudDisplayName_);
 				}
 			}
 
@@ -1002,26 +1013,21 @@ int CameraAlign::init()
 					doOp_ = doOpEnum::DoOpNothing;
 
 					// get homogarphy
-					homographyIrOnVis_ = calculateHomographyIrOnVis(matchPoints2);
-					homographyIrOnCloud_ = calculateHomographyIrOnCloud(matchPoints2);
-					homographyVisOnCloud_ = calculateHomographyVisOnCloud(matchPoints2);
-
-					//// Warp source image to destination based on homography
-					////cv::warpPerspective(irImgIn, imFitted, homography, visImgIn.size());
-					////cv::warpPerspective(irImage_->image, imFitted, homographyIrOnVis_, rgbImage_->image.size());
-					////cv::imshow("imFitted", imFitted);
-
-					//fo.fuse(irImage_->image, rgbImage_->image, imFusedIrOnVis, homographyIrOnVis_, iThermalAlpha_, iColorAlpha_);
-					//cv::imshow("imFusedIrOnVis", imFusedIrOnVis);
+					haveHomographyIrOnVis_ = calculateHomographyIrOnVis(matchPoints2, homographyIrOnVis_);
+					haveHomographyIrOnCloud_ = calculateHomographyIrOnCloud(matchPoints2, homographyIrOnCloud_);
+					haveHomographyVisOnCloud_ = calculateHomographyVisOnCloud(matchPoints2, homographyVisOnCloud_);
 
 					break;
 				case doOpEnum::DoOpAccept:
 
 					doOp_ = doOpEnum::DoOpNothing;
 
-					FuseOps::writeWarpFile(warpFileNameIrOnVis, homographyIrOnVis_);
-					FuseOps::writeWarpFile(warpFileNameIrOnCloud, homographyIrOnCloud_);
-					FuseOps::writeWarpFile(warpFileNameVisOnCloud, homographyVisOnCloud_);
+					if(haveHomographyIrOnVis_)
+						FuseOps::writeWarpFile(warpFileNameIrOnVis, homographyIrOnVis_);
+					if(haveHomographyIrOnCloud_)
+						FuseOps::writeWarpFile(warpFileNameIrOnCloud, homographyIrOnCloud_);
+					if(haveHomographyVisOnCloud_)
+						FuseOps::writeWarpFile(warpFileNameVisOnCloud, homographyVisOnCloud_);
 
 					break;
 				case doOpEnum::DoOpQuit:

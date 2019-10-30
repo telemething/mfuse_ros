@@ -54,6 +54,7 @@ public:
   void DoFuse();
   void DoAccept();
   void DoQuit();
+  bool showLines = false;
 
 private:
 
@@ -93,8 +94,8 @@ private:
   std::thread log_thread; 
   std::thread displayThread_;
 
-  int iThermalAlpha = 50;
-  int iColorAlpha = 50;
+  int iThermalAlpha = 50, iColorAlpha = 50;
+  int irToVisBlend_ = 50, irToCloudBlend_ = 50, visToCloudBlend_ = 50;
 
   int projectionImageWidth_ = 500, projectionImageHeight_ = 500, projectionImageScale_ = 10;
   int projectionImageDepthMin_ = 0, projectionImageDepthMax_ = 255, projectionImageDepthTrack_ = 127;
@@ -143,11 +144,13 @@ private:
 		cv::Mat& imCombined);
   void combineImages(const cv::Mat& im1, const cv::Mat& im2, 
 		const cv::Mat& im3, cv::Mat& imCombined);
-  void drawMatchPoints(const cv::Mat& img, std::vector<CameraAlign::matchPointType2>& points);
+  void drawMatchPoints(const cv::Mat& img, 
+    std::vector<CameraAlign::matchPointType2>& points, 
+		CameraAlign::matchPointType2 pointUnderway);
 	cv::Mat calculateHomography(std::vector<matchPointType> matchPoints);
-  cv::Mat calculateHomographyIrOnVis(std::vector<matchPointType2> matchPoints);
-  cv::Mat calculateHomographyIrOnCloud(std::vector<matchPointType2> matchPoints);
-  cv::Mat calculateHomographyVisOnCloud(std::vector<matchPointType2> matchPoints);
+  bool calculateHomographyIrOnVis(std::vector<matchPointType2> matchPoints, cv::Mat& warpOut);
+  bool calculateHomographyIrOnCloud(std::vector<matchPointType2> matchPoints, cv::Mat& warpOut);
+  bool calculateHomographyVisOnCloud(std::vector<matchPointType2> matchPoints, cv::Mat& warpOut);
 	void rectifyManually(cv::Mat& im1, cv::Mat& im2, cv::Mat& im3);
 
   void createFusedWindows();
