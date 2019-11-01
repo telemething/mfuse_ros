@@ -182,10 +182,26 @@ int CameraAlign::init()
 	{
 		if( 1 == FuseOps::readWarpFile(warpFileNameIrOnVis, homographyIrOnVis_))
 			haveHomographyIrOnVis_ = true;
+
 		if( 1 == FuseOps::readWarpFile(warpFileNameIrOnCloud, homographyIrOnCloud_))
+		{
+			if(!warpToCloud_)
+			{
+				// invert to get cloud on ir
+				homographyIrOnCloud_ = homographyIrOnCloud_.inv();
+			}
 			haveHomographyIrOnCloud_ = true;
+		}
+
 		if( 1 == FuseOps::readWarpFile(warpFileNameVisOnCloud, homographyVisOnCloud_))
+		{
+			if(!warpToCloud_)
+			{
+				// invert to get cloud on vis
+				homographyVisOnCloud_ = homographyVisOnCloud_.inv();
+			}
 			haveHomographyVisOnCloud_ = true;
+		}
 
 		return 1;
 	}
@@ -975,14 +991,14 @@ int CameraAlign::init()
 					if(warpToCloud_)
 					{
 						// forward: vis on cloud
-						//fo.fuse(rgbImage_->image, cloudProjectionImage, imFusedVisOnCloud, 
-						//	homographyVisOnCloud_, visToCloudBlend_, 0, false);
+						fo.fuse2(rgbImage_->image, cloudProjectionImage, imFusedVisOnCloud, 
+							homographyVisOnCloud_, visToCloudBlend_, 0, false, true);
 					}
 					else
 					{
 						// Inverse: cloud on vis
-						fo.fuse(cloudProjectionImage, rgbImage_->image, imFusedVisOnCloud, 
-							homographyVisOnCloud_.inv(), visToCloudBlend_, 0, false);
+						fo.fuse2(cloudProjectionImage, rgbImage_->image, imFusedVisOnCloud, 
+							homographyVisOnCloud_, visToCloudBlend_, 0, false, true);
 					}
 
 					showVisOnCloudWindow(imFusedVisOnCloud, imFusedVisOnCloudDisplayName_);

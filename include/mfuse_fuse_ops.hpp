@@ -34,6 +34,8 @@ public:
     static cv::Mat getMask(const cv::Mat original, const std::vector<cv::Point2f> area, const bool include) ;
     int fuse(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage, 
         const cv::Mat& warpMatrix, const int iThermalAlpha, const int iColorAlpha, bool colorize);
+    int fuse2(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage, 
+        const cv::Mat& warpMatrix, const int iThermalAlpha, const int iColorAlpha, bool doColorize, bool doWarp);
 
 }; // class FuseOps   
 } // namespace mfuse
