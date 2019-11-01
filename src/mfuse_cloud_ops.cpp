@@ -102,6 +102,25 @@ void toROSMsg(const sensor_msgs::PointCloud2 &cloud, sensor_msgs::Image &image)
 //pcl::toROSMsg (*msg, cloudInRosImage_); 
 //cloudInImage_ = cv_bridge::toCvCopy(cloudInRosImage_, sensor_msgs::image_encodings::MONO16);
 
+void CloudOps::SetCloudToIrWarp(cv::Mat cloudToIrWarp)
+{
+  cloudToIrWarp_ = cloudToIrWarp;
+}
+
+void CloudOps::SetCloudToVisWarp(cv::Mat cloudToVisWarp)
+{
+  cloudToVisWarp_ = cloudToVisWarp;
+}
+
+void CloudOps::SetLookUpIrImage(cv::Mat& lookUpIrImage )
+{
+  lookUpIrImage_ = lookUpIrImage;
+}
+
+void CloudOps::SetLookUpVisImage(cv::Mat& lookUpVisImage )
+{
+  lookUpVisImage_ = lookUpVisImage;
+}
 
 //*****************************************************************************
 //*
@@ -157,15 +176,18 @@ void CloudOps::toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud,
             minX = std::min(minX,cloud[x].x);
         }
 
-        if(colorizeLUT)
-          theColor = colmap_->_lut.at<cv::Vec3b>(0,cloud[x].x * intensityScale);
-
         if(0 < cloud[x].x)
         {
-          float imgRow = (scale * -cloud[x].z) * (distToProjPlane_ / cloud[x].x) + width/2;
-          float imgCol = (scale * -cloud[x].y) * (distToProjPlane_ / cloud[x].x) + height/2;
-                
-          auto pixel = &outImage.at<cv::Vec3b>(imgRow,imgCol);
+          cv::Point2i imgPoint;
+
+          imgPoint.x = (scale * -cloud[x].z) * (distToProjPlane_ / cloud[x].x) + width/2;
+          imgPoint.y = (scale * -cloud[x].y) * (distToProjPlane_ / cloud[x].x) + height/2;
+
+          if(colorizeLUT)
+            theColor = colmap_->_lut.at<cv::Vec3b>(0,cloud[x].x * intensityScale);
+
+          auto pixel = &outImage.at<cv::Vec3b>(imgPoint.x,imgPoint.y);
+
           memcpy( pixel, &theColor, 3 * sizeof(uint8_t));
         }
       }

@@ -972,8 +972,19 @@ int CameraAlign::init()
 				}*/
 				if(haveHomographyVisOnCloud_)
 				{
-					fo.fuse(rgbImage_->image, cloudProjectionImage, imFusedVisOnCloud, 
-						homographyVisOnCloud_, visToCloudBlend_, 0, false);
+					if(warpToCloud_)
+					{
+						// forward: vis on cloud
+						//fo.fuse(rgbImage_->image, cloudProjectionImage, imFusedVisOnCloud, 
+						//	homographyVisOnCloud_, visToCloudBlend_, 0, false);
+					}
+					else
+					{
+						// Inverse: cloud on vis
+						fo.fuse(cloudProjectionImage, rgbImage_->image, imFusedVisOnCloud, 
+							homographyVisOnCloud_.inv(), visToCloudBlend_, 0, false);
+					}
+
 					showVisOnCloudWindow(imFusedVisOnCloud, imFusedVisOnCloudDisplayName_);
 				}
 			}

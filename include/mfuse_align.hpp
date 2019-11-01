@@ -83,6 +83,7 @@ private:
   bool gotcloudProjectionImage_ = false;  
   bool alignWindowCreated_ = false;
   bool showCloudInStreams_ = false;
+  bool warpToCloud_ = false; // If true: warps vis and ir to cloud. If false: warps cloud to vis and ir
 
   CloudOps cloudOps_;
   std::vector<matchPointType2> matchPoints_;

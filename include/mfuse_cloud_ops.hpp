@@ -65,6 +65,11 @@ public:
   void RunCurrentCloudCreationThread(int width, int height, int scale, int sleepTime);
   void SetDepthRange(int minDepth, int maxDepth);
 
+  void SetCloudToIrWarp(cv::Mat cloudToIrWarp);
+  void SetCloudToVisWarp(cv::Mat cloudToVisWarp);
+  void SetLookUpIrImage(cv::Mat& LookUpIrImage );
+  void SetLookUpVisImage(cv::Mat& LookUpVisImage );
+
 private:
 
   boost::shared_mutex projectionImageMutex_;
@@ -86,6 +91,8 @@ private:
   std::thread currentCloudloopThread_; 
 
   float maxX = 0, maxY = 0, maxZ = 0, minX = 255, minY = 255, minZ = 255;
+
+  cv::Mat cloudToIrWarp_, cloudToVisWarp_, lookUpIrImage_, lookUpVisImage_;
 
   int currentCloudloop();
 
