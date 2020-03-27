@@ -170,6 +170,9 @@ int CameraFuse::fusionloop()
 	double colorAlpha = .5;
   bool gotMasks = false;
 	ros::Rate sleepTime(updateFrequency);
+
+  //TODO * Should we colorize here? Not sure.
+  bool colorizeThermal = false;
 	
 	cv::Mat imWarped, imColorized, roiIncludeVisibleImage, roiExcludeVisibleImage, irImage, rgbImage;
   std::vector<cv::Point2f> warpedBBox;
@@ -206,7 +209,7 @@ int CameraFuse::fusionloop()
       }
 
       fo.fuse(irImage, rgbImage, fusedImage_, 
-        warpMatrix_, iThermalAlpha_, iColorAlpha_);
+        warpMatrix_, iThermalAlpha_, iColorAlpha_, colorizeThermal);
 
       fusedImageReady_.post();
     }

@@ -87,6 +87,7 @@ private:
   bool collectCloudDataStats_ = false;
   bool autoScaleColorMap_ = true;
   bool colorize_ = false;
+  bool warpNow_ = false;
   cv::Mat currentProjectionImage_;
   std::thread currentCloudloopThread_; 
 

@@ -20,6 +20,7 @@ namespace mfuse
 FuseOps::FuseOps(std::shared_ptr<spdlog::logger> logger)
 {
   logger_ = logger;
+  showDebugImages_ = false;
 }
 
 //*****************************************************************************
@@ -89,7 +90,8 @@ int FuseOps::DrawROI(cv::Mat image, std::vector<cv::Point2f> outline)
 //
 //*****************************************************************************
 
-std::vector<cv::Point2f> FuseOps::getTransposedBBox(const cv::Mat original, const cv::Mat warpMatrix)
+std::vector<cv::Point2f> FuseOps::getTransposedBBox(const cv::Mat original, 
+  const cv::Mat warpMatrix)
 {
 	std::vector<cv::Point2f> vIn;
 	std::vector<cv::Point2f> vOut;
@@ -110,7 +112,8 @@ std::vector<cv::Point2f> FuseOps::getTransposedBBox(const cv::Mat original, cons
 //
 //*****************************************************************************
 
-cv::Mat FuseOps::getMask(const cv::Mat original, const std::vector<cv::Point2f> area, const bool include) 
+cv::Mat FuseOps::getMask(const cv::Mat original, 
+  const std::vector<cv::Point2f> area, const bool include) 
 {
 	std::vector<cv::Point> hull;
 
@@ -140,9 +143,9 @@ int FuseOps::fuse(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage,
     {
       if(!gotMasks)
       {
-        warpedBBox = FuseOps::getTransposedBBox(irImage, warpMatrix);
-        roiIncludeMask = FuseOps::getMask(rgbImage, warpedBBox, true);
-        cv::bitwise_not(roiIncludeMask, roiExcludeMask);
+        warpedBBox_ = FuseOps::getTransposedBBox(irImage, warpMatrix);
+        roiIncludeMask_ = FuseOps::getMask(rgbImage, warpedBBox_, true);
+        cv::bitwise_not(roiIncludeMask_, roiExcludeMask_);
         gotMasks = true;
       }
 
@@ -173,7 +176,7 @@ int FuseOps::fuse(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage,
         cv::imshow("imWarped", imWarped);
 
       // mask out the visible image outside of thermal viewport
-      rgbImage.copyTo(roiIncludeVisibleImage, roiIncludeMask);
+      rgbImage.copyTo(roiIncludeVisibleImage, roiIncludeMask_);
 
       {
         //lock out_image_, dont modify out_image_ before here
@@ -187,7 +190,7 @@ int FuseOps::fuse(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage,
           cv::imshow("imFusedSmall", fusedImage);
 
         // mask out the visible area inside the thermal viewport
-        rgbImage.copyTo(roiExcludeVisibleImage, roiExcludeMask);
+        rgbImage.copyTo(roiExcludeVisibleImage, roiExcludeMask_);
 
         // merge the visible and thermal images in the visible viewport
         cv::addWeighted(fusedImage, 1, roiExcludeVisibleImage, 1, 0.0, fusedImage);
@@ -195,7 +198,7 @@ int FuseOps::fuse(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage,
         //----fusedImageReady_.post();
 
         if (showDebugImages_)
-          FuseOps::DrawROI(fusedImage, warpedBBox);
+          FuseOps::DrawROI(fusedImage, warpedBBox_);
       }
 
       if(showDebugImages_)
@@ -225,13 +228,24 @@ int FuseOps::fuse2(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage,
     const cv::Mat& warpMatrix, const int iThermalAlpha, const int iColorAlpha, 
     bool doColorize, bool doWarp)
 { 
+    int spot = 0;
+
     try
     {
       if(!gotMasks)
       {
-        warpedBBox = FuseOps::getTransposedBBox(irImage, warpMatrix);
-        roiIncludeMask = FuseOps::getMask(rgbImage, warpedBBox, true);
-        cv::bitwise_not(roiIncludeMask, roiExcludeMask);
+        cv::Mat irImageUnwarped;
+        //if(doWarp) // If we do warp here, we need to find the BBox based on the pre image
+          warpedBBox_ = FuseOps::getTransposedBBox(irImage, warpMatrix);
+        //else // If we don't do warp here, it means it has been done elsewhere. We need 
+             // wunwarp to find the gre image and find the BBox based on that
+        //{
+        //  cv::warpPerspective(irImage, irImageUnwarped, warpMatrix.inv(), rgbImage.size());
+        //  warpedBBox_ = FuseOps::getTransposedBBox(irImageUnwarped, warpMatrix);
+        //}
+
+        roiIncludeMask_ = FuseOps::getMask(rgbImage, warpedBBox_, true);
+        cv::bitwise_not(roiIncludeMask_, roiExcludeMask_);
         gotMasks = true;
       }
 
@@ -264,8 +278,21 @@ int FuseOps::fuse2(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage,
       if (showDebugImages_)
         cv::imshow("imWarped", imWarped);
 
+      spot = 1;
+
+      if( rgbImage.dims < 2 )
+        logger_->error("- EXCEPTION --- FuseOps::fuse2({}): rgbImage.dims < 2", spot );
+
+      if( roiIncludeMask_.dims < 2 )
+        logger_->error("- EXCEPTION --- FuseOps::fuse2({}): roiIncludeMask_.dims < 2", spot );
+
+      if( rgbImage.dims != roiIncludeMask_.dims )
+        logger_->error("- EXCEPTION --- FuseOps::fuse2({}): rgbImage.dims != roiIncludeMask_.dims", spot );
+
       // mask out the visible image outside of thermal viewport
-      rgbImage.copyTo(roiIncludeVisibleImage, roiIncludeMask);
+      rgbImage.copyTo(roiIncludeVisibleImage, roiIncludeMask_);
+
+      spot = 2;
 
       {
         //lock out_image_, dont modify out_image_ before here
@@ -278,16 +305,20 @@ int FuseOps::fuse2(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage,
         if (showDebugImages_)
           cv::imshow("imFusedSmall", fusedImage);
 
+        spot = 3;
+
         // mask out the visible area inside the thermal viewport
-        rgbImage.copyTo(roiExcludeVisibleImage, roiExcludeMask);
+        rgbImage.copyTo(roiExcludeVisibleImage, roiExcludeMask_);
+
+        spot = 4;
 
         // merge the visible and thermal images in the visible viewport
         cv::addWeighted(fusedImage, 1, roiExcludeVisibleImage, 1, 0.0, fusedImage);
 
-        //----fusedImageReady_.post();
+        //----fusedImageReady_.posMark
 
         if (showDebugImages_)
-          FuseOps::DrawROI(fusedImage, warpedBBox);
+          FuseOps::DrawROI(fusedImage, warpedBBox_);
       }
 
       if(showDebugImages_)
@@ -295,16 +326,34 @@ int FuseOps::fuse2(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage,
     }
     catch(const std::exception& e)
     {
+      // TODO : We shouldn't just ignore this, find the cause
+      if( 0 < std::string(e.what()).find("size() == mask.size()") )
+        return 0;
+
       //ROS_ERROR("--- EXCEPTION --- CameraFuse::fusionloop: %s", e.what());
-      logger_->error("- EXCEPTION --- FuseOps::fuse(): {}", e.what());
+      logger_->error("- EXCEPTION --- FuseOps::fuse2({}): {}", spot, e.what() );
+      return -1;
     }
     catch(...)
     {
       //ROS_ERROR("--- EXCEPTION --- CameraFuse::fusionloop: -undefined-");
-      logger_->error("--- EXCEPTION --- FuseOps::fuse)(): -undefined-");
+      logger_->error("--- EXCEPTION --- FuseOps::fuse2(): -undefined-");
+      return -1;
     }
 
   return 0; 
+}
+
+//*****************************************************************************
+//*
+//*
+//*
+//******************************************************************************
+
+int FuseOps::colorize( pcl::PointCloud<pcl::PointXYZI>& cloud, 
+  const cv::Mat& image, const cv::Mat& warpMatrix)
+{ 
+  return 0;
 }
 
 } // namespace mfuse

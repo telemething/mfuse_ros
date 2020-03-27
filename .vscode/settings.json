@@ -75,6 +75,7 @@
         "valarray": "cpp",
         "*.ipp": "cpp",
         "codecvt": "cpp",
-        "future": "cpp"
+        "future": "cpp",
+        "*.txx": "cpp"
     }
 }

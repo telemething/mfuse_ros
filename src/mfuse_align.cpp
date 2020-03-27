@@ -155,8 +155,12 @@ int CameraAlign::init()
 	projectionImageDepthMin_ = 0;
 	projectionImageDepthMax_ = 255;
 	projectionImageDepthTrack_ = 127;
+
+	readWarpFiles();
 	
-	cloudOps_.SetQueueSize(200);
+	cloudOps_.SetCloudToIrWarp(homographyIrOnCloud_);
+	cloudOps_.SetCloudToVisWarp(homographyVisOnCloud_);
+	cloudOps_.SetQueueSize(50);
 	cloudOps_.RunCurrentCloudCreationThread(projectionImageWidth_, 
 		projectionImageHeight_, projectionImageScale_, 100 );
 	cloudOps_.SetDepthRange(projectionImageDepthMin_,projectionImageDepthMax_);
@@ -940,6 +944,7 @@ int CameraAlign::init()
 		cv::Mat imCombined, irImg, visImg, cloudProjectionImage;
 		cv::Mat imFusedIrOnVis, imFusedIrOnCloud, imFusedVisOnCloud;
 		int iThermalAlpha_ = 50, iColorAlpha_ = 50;
+		int fuseRet = 0;
 
 		double alpha = 0.5; double beta = 1 - alpha;
 
@@ -991,17 +996,18 @@ int CameraAlign::init()
 					if(warpToCloud_)
 					{
 						// forward: vis on cloud
-						fo.fuse2(rgbImage_->image, cloudProjectionImage, imFusedVisOnCloud, 
+						fuseRet = fo.fuse2(rgbImage_->image, cloudProjectionImage, imFusedVisOnCloud, 
 							homographyVisOnCloud_, visToCloudBlend_, 0, false, true);
 					}
 					else
 					{
 						// Inverse: cloud on vis
-						fo.fuse2(cloudProjectionImage, rgbImage_->image, imFusedVisOnCloud, 
+						fuseRet = fo.fuse2(cloudProjectionImage, rgbImage_->image, imFusedVisOnCloud, 
 							homographyVisOnCloud_, visToCloudBlend_, 0, false, true);
 					}
 
-					showVisOnCloudWindow(imFusedVisOnCloud, imFusedVisOnCloudDisplayName_);
+					if(0 == fuseRet)
+						showVisOnCloudWindow(imFusedVisOnCloud, imFusedVisOnCloudDisplayName_);
 				}
 			}
 

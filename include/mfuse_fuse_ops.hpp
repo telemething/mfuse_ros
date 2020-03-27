@@ -3,7 +3,7 @@
 // OpenCV
 #include "opencv2/opencv.hpp"
 
-//#include <mfuse_cloud_ops.hpp>
+#include <mfuse_cloud_ops.hpp>
 #include <mfuse_logger.hpp>
 
 namespace mfuse
@@ -13,8 +13,8 @@ class FuseOps
 private:
 
     cv::Mat imWarped, imColorized, roiIncludeVisibleImage, roiExcludeVisibleImage;
-    std::vector<cv::Point2f> warpedBBox;
-    cv::Mat roiIncludeMask, roiExcludeMask;
+    std::vector<cv::Point2f> warpedBBox_;
+    cv::Mat roiIncludeMask_, roiExcludeMask_;
     bool showDebugImages_ = false;
     double updateFrequency = 30;
     double thermalAlpha = .5;
@@ -36,6 +36,8 @@ public:
         const cv::Mat& warpMatrix, const int iThermalAlpha, const int iColorAlpha, bool colorize);
     int fuse2(cv::Mat& irImage, cv::Mat& rgbImage, cv::Mat& fusedImage, 
         const cv::Mat& warpMatrix, const int iThermalAlpha, const int iColorAlpha, bool doColorize, bool doWarp);
+
+    int colorize( pcl::PointCloud<pcl::PointXYZI>& cloud, const cv::Mat& image, const cv::Mat& warpMatrix);
 
 }; // class FuseOps   
 } // namespace mfuse

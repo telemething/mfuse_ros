@@ -12,7 +12,8 @@ CloudOps::CloudOps()
 {
   collectCloudDataStats_ = false;
   autoScaleColorMap_ = true;
-  cloudQueueSizeMax_ = 50;
+  cloudQueueSizeMax_ = 10;
+  warpNow_ = false;
 
   Colorize(true);
 }
@@ -145,6 +146,10 @@ void CloudOps::toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud,
         intensityScale = 255 / maxX;
     }
 
+    std::vector<cv::Point2f> inPoints, outPoints;
+    if(warpNow_)
+      inPoints.push_back(cv::Point2f(0,0));
+
     cv::Vec3b theColor;
     theColor[0] = 255;
     theColor[1] = 125;
@@ -186,9 +191,31 @@ void CloudOps::toCvImage(const pcl::PointCloud<pcl::PointXYZI>& cloud,
           if(colorizeLUT)
             theColor = colmap_->_lut.at<cv::Vec3b>(0,cloud[x].x * intensityScale);
 
-          auto pixel = &outImage.at<cv::Vec3b>(imgPoint.x,imgPoint.y);
+          if(warpNow_)
+          {
+            // opt 1
+            //imgPoint = cloudToVisWarp_ * imgPoint;
 
-          memcpy( pixel, &theColor, 3 * sizeof(uint8_t));
+            // opt 2
+            //std::vector<cv::Point2f> inPoints, outPoints;
+            //inPoints.push_back(cv::Point2f(imgPoint.x,imgPoint.y));
+
+            inPoints.front().x = imgPoint.x;
+            inPoints.front().y = imgPoint.y;
+
+            cv::perspectiveTransform(inPoints,outPoints,cloudToVisWarp_);
+
+            imgPoint.x = outPoints.front().x;
+            imgPoint.y = outPoints.front().y;
+
+            // if warp now
+          }
+
+          if(imgPoint.x > 0 && imgPoint.y > 0 && imgPoint.x < outImage.rows && imgPoint.y < outImage.cols)
+          {
+            auto pixel = &outImage.at<cv::Vec3b>(imgPoint.x,imgPoint.y);
+            memcpy( pixel, &theColor, 3 * sizeof(uint8_t));
+          }
         }
       }
     }
